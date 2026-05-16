@@ -18,9 +18,6 @@ import {
 
 import { fetchWebContext } from '@/lib/web-fetch'
 
-/* =========================
-   MODEL
-========================= */
 function getModel() {
   const provider = process.env.LLM_PROVIDER
 
@@ -36,9 +33,6 @@ function getModel() {
   }
 }
 
-/* =========================
-   SCHEMA
-========================= */
 const agentPredictionSchema = z.object({
   probability: z.number().min(0.01).max(0.99),
 
@@ -54,17 +48,6 @@ const agentPredictionSchema = z.object({
   ),
 })
 
-/* =========================
-   TYPES
-========================= */
-interface StructuredSource {
-  title: string
-  url: string
-}
-
-/* =========================
-   AGENT RUNNER
-========================= */
 async function runAgentPrediction(
   agent: typeof AGENT_CONFIGS[0],
   market: Market,
@@ -73,25 +56,39 @@ async function runAgentPrediction(
   const currentProb =
     getCurrentProbability(currentMarketState)
 
-  let webResearch: {
-    context: string
-    sources: StructuredSource[]
-  } = {
-    context: 'No context available',
+  let web = {
+    answer: '',
     sources: [],
   }
 
   try {
-    webResearch = await fetchWebContext(
+    web = await fetchWebContext(
       market.question_clean,
       agent.searchApproach
     )
   } catch {
-    webResearch = {
-      context: 'Web research failed',
+    web = {
+      answer: 'Web research failed',
       sources: [],
     }
   }
+
+  const formattedContext = [
+    web.answer
+      ? `SUMMARY:\n${web.answer}`
+      : null,
+
+    ...web.sources.map(
+      (source, index) => `
+SOURCE ${index + 1}
+TITLE: ${source.title}
+URL: ${source.url}
+CONTENT: ${source.content}
+`
+    ),
+  ]
+    .filter(Boolean)
+    .join('\n\n')
 
   try {
     const { object: prediction } =
@@ -127,22 +124,22 @@ ${market.category}
 Current Market Probability:
 ${(currentProb * 100).toFixed(1)}%
 
-Independent Research Context:
-${webResearch.context}
+Independent Research:
+${formattedContext}
 
-IMPORTANT:
+Instructions:
 - Think independently
 - Stay faithful to your persona
+- Use different evidence weighting from other agents
 - Avoid consensus thinking
 - Use nuanced probabilistic reasoning
-- Confidence should reflect uncertainty realistically
-- Use ONLY the provided research evidence
-- sourcesUsed MUST contain EXACTLY 5 sources
-- Each source must include:
-  - title
-  - url
-- Preserve original source titles exactly
-- Preserve original URLs exactly
+- Confidence should realistically reflect uncertainty
+- Only use sources from the supplied research
+- Select exactly 5 best sources
+- Preserve exact source title and exact source URL
+- Do not invent URLs
+- Do not shorten URLs
+- Do not output markdown
 
 Return:
 - probability
@@ -152,53 +149,34 @@ Return:
 `,
       })
 
-    /* =========================
-       FORCE REAL API SOURCES
-    ========================= */
-
-    const normalizedSources =
-      webResearch.sources
-        .filter(
-          (s) =>
-            s.title &&
-            s.url &&
-            s.url.startsWith('http')
-        )
-        .slice(0, 5)
-
-    while (normalizedSources.length < 5) {
-      normalizedSources.push({
-        title: 'Additional Research Source',
-        url: 'https://example.com',
-      })
-    }
+    const normalizedSources = web.sources
+      .slice(0, 5)
+      .map((source) => ({
+        title: source.title,
+        url: source.url,
+      }))
 
     return {
-      probability: prediction.probability,
-      confidence: prediction.confidence,
-      reasoning: prediction.reasoning,
-
-      // IMPORTANT:
-      // override hallucinated sources
+      ...prediction,
       sourcesUsed: normalizedSources,
     }
   } catch {
     return {
       probability: currentProb,
-
       confidence: 0.2,
-
       reasoning:
         'Fallback prediction generated due to model failure.',
 
-      sourcesUsed: [],
+      sourcesUsed: web.sources
+        .slice(0, 5)
+        .map((source) => ({
+          title: source.title,
+          url: source.url,
+        })),
     }
   }
 }
 
-/* =========================
-   ROUTE
-========================= */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -244,9 +222,6 @@ export async function POST(
 
     const results = []
 
-    /* =========================
-       MULTI-AGENT LOOP
-    ========================= */
     for (const agent of AGENT_CONFIGS) {
       const prediction =
         await runAgentPrediction(
@@ -289,7 +264,6 @@ export async function POST(
 
           reasoning: prediction.reasoning,
 
-          // store JSON safely
           sources_used: prediction.sourcesUsed,
         })
         .select()
@@ -300,9 +274,6 @@ export async function POST(
       }
     }
 
-    /* =========================
-       FINAL MARKET UPDATE
-    ========================= */
     const finalProbability =
       getCurrentProbability(currentState)
 
