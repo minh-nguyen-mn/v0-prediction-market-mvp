@@ -60,19 +60,13 @@ async function runAgentPrediction(
   const currentProb =
     getCurrentProbability(currentMarketState)
 
-  /* =========================
-     INDEPENDENT AGENT RESEARCH
-  ========================= */
-  let webContext = 'No context available'
-
-  try {
-    webContext = await fetchWebContext(
+  const webResearch =
+    await fetchWebContext(
       market.question_clean,
       agent.searchApproach
     )
-  } catch {
-    webContext = 'Web research failed'
-  }
+
+  const webContext = webResearch.context
 
   try {
     const { object: prediction } =
@@ -102,7 +96,7 @@ ${market.question_clean}
 Resolution Criteria:
 ${market.resolution_criteria}
 
-Market Category:
+Category:
 ${market.category}
 
 Current Market Probability:
@@ -114,11 +108,11 @@ ${webContext}
 Instructions:
 - Think independently
 - Stay faithful to your persona
-- Use your own interpretation of the evidence
-- Avoid consensus thinking
-- Provide nuanced probabilistic reasoning
-- Confidence should reflect uncertainty realistically
-- sourcesUsed must contain the most relevant research sources from the provided evidence
+- Use your own interpretation
+- Avoid herd thinking
+- Use nuanced probabilistic reasoning
+- Confidence should realistically reflect uncertainty
+- sourcesUsed should be short source identifiers only
 
 Return:
 - probability
@@ -128,14 +122,34 @@ Return:
 `,
       })
 
-    return prediction
+    const structuredSources =
+      webResearch.sources.map((source) =>
+        JSON.stringify({
+          title: source.title,
+          url: source.url,
+        })
+      )
+
+    return {
+      ...prediction,
+      sourcesUsed: structuredSources,
+    }
   } catch {
     return {
       probability: currentProb,
+
       confidence: 0.2,
+
       reasoning:
         'Fallback prediction generated due to model failure.',
-      sourcesUsed: [],
+
+      sourcesUsed:
+        webResearch.sources.map((source) =>
+          JSON.stringify({
+            title: source.title,
+            url: source.url,
+          })
+        ),
     }
   }
 }

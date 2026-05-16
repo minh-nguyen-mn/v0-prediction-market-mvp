@@ -7,7 +7,7 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle
+  CardTitle,
 } from '@/components/ui/card'
 
 import type { AgentPrediction } from '@/lib/types'
@@ -24,12 +24,43 @@ const agentColors: Record<string, string> = {
   'Signal Scout': 'bg-red-500',
 }
 
+function parseSource(source: string) {
+  try {
+    if (source.startsWith('{')) {
+      const parsed = JSON.parse(source)
+
+      return {
+        title: parsed.title || parsed.url || 'Source',
+        url: parsed.url || '',
+      }
+    }
+
+    const titleMatch = source.match(/TITLE:\s*(.*?)(\n|$)/)
+    const urlMatch = source.match(/URL:\s*(.*?)(\n|$)/)
+
+    return {
+      title:
+        titleMatch?.[1]?.trim() ||
+        urlMatch?.[1]?.trim() ||
+        'Source',
+
+      url: urlMatch?.[1]?.trim() || '',
+    }
+  } catch {
+    return {
+      title: source,
+      url: '',
+    }
+  }
+}
+
 export function AgentPredictionCard({
   prediction,
 }: AgentPredictionCardProps) {
   const [expanded, setExpanded] = useState(false)
 
   const probability = Number(prediction.probability) * 100
+
   const confidence = Number(prediction.confidence) * 100
 
   const colorClass =
@@ -54,7 +85,6 @@ export function AgentPredictionCard({
       </CardHeader>
 
       <CardContent>
-        {/* METRICS */}
         <div className="mb-3 flex gap-4">
           <div>
             <p className="text-xl font-bold">
@@ -77,7 +107,6 @@ export function AgentPredictionCard({
           </div>
         </div>
 
-        {/* REASONING */}
         <div className="text-sm">
           <p className="mb-1 font-medium">
             Reasoning:
@@ -103,7 +132,6 @@ export function AgentPredictionCard({
           </button>
         </div>
 
-        {/* SOURCES */}
         {prediction.sources_used &&
           prediction.sources_used.length > 0 && (
             <div className="mt-4">
@@ -111,38 +139,20 @@ export function AgentPredictionCard({
                 Sources
               </p>
 
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-2">
                 {prediction.sources_used
                   .slice(0, 5)
-                  .map((source, i) => {
-                    let title = source
-                    let url = ''
+                  .map((rawSource, i) => {
+                    const source =
+                      parseSource(rawSource)
 
-                    const titleMatch =
-                      source.match(
-                        /SOURCE_TITLE:\s*(.*?)(\n|$)/
-                      )
-
-                    const urlMatch =
-                      source.match(
-                        /SOURCE_URL:\s*(.*?)(\n|$)/
-                      )
-
-                    if (titleMatch) {
-                      title = titleMatch[1]
-                    }
-
-                    if (urlMatch) {
-                      url = urlMatch[1]
-                    }
-
-                    if (!url) {
+                    if (!source.url) {
                       return (
                         <div
                           key={i}
-                          className="truncate rounded bg-muted px-2 py-1 text-xs text-muted-foreground"
+                          className="rounded bg-muted px-2 py-1 text-xs text-muted-foreground"
                         >
-                          {title}
+                          {source.title}
                         </div>
                       )
                     }
@@ -150,13 +160,13 @@ export function AgentPredictionCard({
                     return (
                       <a
                         key={i}
-                        href={url}
+                        href={source.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="truncate rounded bg-muted px-2 py-1 text-xs text-primary hover:underline"
-                        title={url}
+                        className="rounded bg-muted px-2 py-1 text-xs text-primary transition hover:bg-muted/70 hover:underline"
+                        title={source.url}
                       >
-                        {title}
+                        {source.title}
                       </a>
                     )
                   })}
