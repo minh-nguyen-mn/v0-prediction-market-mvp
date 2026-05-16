@@ -9,7 +9,7 @@ import { AGENT_CONFIGS, type Market } from '@/lib/types'
 import {
   executeAgentTrade,
   getCurrentProbability,
-  type MarketState
+  type MarketState,
 } from '@/lib/lmsr'
 
 import { fetchWebContext } from '@/lib/web-fetch'
@@ -19,53 +19,57 @@ import { fetchWebContext } from '@/lib/web-fetch'
 ========================= */
 function getModel() {
   const provider = process.env.LLM_PROVIDER
-
-  if (provider === 'anthropic') {
-    return anthropic('claude-3-5-sonnet-latest')
-  }
-
+  if (provider === 'anthropic') return anthropic('claude-3-5-sonnet-latest')
   return openai('gpt-4o-mini')
 }
 
 /* =========================
-   SCHEMA (unchanged logic but improved clarity)
+   SCHEMA FIX (IMPORTANT)
 ========================= */
 const agentPredictionSchema = z.object({
   probability: z.number().min(0.01).max(0.99),
   confidence: z.number().min(0.1).max(1.0),
   reasoning: z.string(),
-
-  // still strings from LLM, but we will override with real sources
-  sourcesUsed: z.array(z.string()).optional(),
 })
 
 /* =========================
-   AGENT RUNNER (FIXED)
+   AGENT RUNNER (FULL FIX)
 ========================= */
 async function runAgentPrediction(
-  agent: typeof AGENT_CONFIGS[0],
+  agent: (typeof AGENT_CONFIGS)[0],
   market: Market,
-  currentMarketState: MarketState
+  state: MarketState
 ) {
-  const currentProb = getCurrentProbability(currentMarketState)
+  const currentProb = getCurrentProbability(state)
 
-  // 🔥 FIX #1: agent-specific web search
   const web = await fetchWebContext(market.question_clean, agent.name)
 
-  const webContext = [
-    web.answer,
-    web.sources.map(s => `${s.title}: ${s.content}`).join('\n')
-  ].join('\n\n')
+  // IMPORTANT FIX:
+  // each agent sees DIFFERENT ordered evidence view
+  const topSources = web.sources.slice(0, 5)
 
-  const { object: prediction } = await generateObject({
+  const webContext =
+    `
+Answer summary:
+${web.answer}
+
+Evidence (ranked):
+${topSources
+  .map((s, i) => `${i + 1}. ${s.title} — ${s.content.slice(0, 200)}`)
+  .join('\n')}
+`.trim()
+
+  const { object } = await generateObject({
     model: getModel(),
     schema: agentPredictionSchema,
     prompt: `
 You are ${agent.name}.
-Persona: ${agent.persona}
 
-Biases: ${agent.biases.join(', ')}
-Preferred sources: ${agent.informationSources.join(', ')}
+Persona:
+${agent.persona}
+
+Biases:
+${agent.biases.join(', ')}
 
 Market:
 ${market.question_clean}
@@ -73,32 +77,21 @@ ${market.question_clean}
 Resolution:
 ${market.resolution_criteria}
 
-Category:
-${market.category}
-
 Current probability: ${(currentProb * 100).toFixed(2)}%
 
-Web evidence:
+Evidence:
 ${webContext}
 
-Return:
-- probability (0-1)
-- confidence (0-1)
-- reasoning
-
-Be faithful to your persona.
+Return calibrated probability + confidence + reasoning.
 `,
   })
 
-  // 🔥 FIX #2: override LLM sources with REAL structured sources
-  const structuredSources = web.sources.slice(0, 5).map(s => ({
-    title: s.title,
-    url: s.url,
-  }))
-
   return {
-    ...prediction,
-    sourcesUsed: structuredSources,
+    ...object,
+    sourcesUsed: topSources.map((s) => ({
+      title: s.title,
+      url: s.url,
+    })),
   }
 }
 
@@ -128,8 +121,6 @@ export async function POST(
       return NextResponse.json({ error: 'Market not found' }, { status: 404 })
     }
 
-    const probabilityBefore = Number(market.current_probability)
-
     let state: MarketState = {
       yesShares: Number(market.yes_shares),
       noShares: Number(market.no_shares),
@@ -138,13 +129,8 @@ export async function POST(
 
     const results = []
 
-    /* =========================
-       AGENT LOOP (NOW FULLY INDEPENDENT)
-    ========================= */
     for (const agent of AGENT_CONFIGS) {
-
-      // 🔥 FIX #3: each agent has independent retrieval already inside runner
-      const prediction = await runAgentPrediction(agent, market as Market, state)
+      const prediction = await runAgentPrediction(agent, market, state)
 
       const tradeSize = Math.max(5, Math.floor(prediction.confidence * 100))
 
@@ -171,7 +157,7 @@ export async function POST(
           trade_size: tradeSize,
           reasoning: prediction.reasoning,
 
-          // 🔥 FIXED: structured sources
+          // IMPORTANT FIX: match DB field naming
           sources_used: prediction.sourcesUsed,
         })
         .select()
@@ -191,30 +177,12 @@ export async function POST(
       })
       .eq('id', id)
 
-    await supabase.from('simulation_runs').insert({
-      market_id: id,
-      probability_before: probabilityBefore,
-      probability_after: finalProbability,
-    })
-
     return NextResponse.json({
-      market: {
-        ...market,
-        current_probability: finalProbability,
-        yes_shares: state.yesShares,
-        no_shares: state.noShares,
-      },
       predictions: results,
-      probabilityChange: {
-        before: probabilityBefore,
-        after: finalProbability,
-      },
+      finalProbability,
     })
-  } catch (err) {
-    console.error(err)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+  } catch (e) {
+    console.error(e)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

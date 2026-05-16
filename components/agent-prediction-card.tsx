@@ -6,14 +6,10 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle
+  CardTitle,
 } from '@/components/ui/card'
 
 import type { AgentPrediction } from '@/lib/types'
-
-interface AgentPredictionCardProps {
-  prediction: AgentPrediction
-}
 
 const agentColors: Record<string, string> = {
   'Analyst Alpha': 'bg-blue-500',
@@ -23,18 +19,22 @@ const agentColors: Record<string, string> = {
   'Information Hunter Iris': 'bg-red-500',
 }
 
-export function AgentPredictionCard({ prediction }: AgentPredictionCardProps) {
+export function AgentPredictionCard({
+  prediction,
+}: {
+  prediction: AgentPrediction
+}) {
   const [expanded, setExpanded] = useState(false)
 
-  const probability = Number(prediction.probability) * 100
-  const confidence = Number(prediction.confidence) * 100
-  const colorClass = agentColors[prediction.agent_name] || 'bg-gray-500'
-
   return (
-    <Card className="soft-shadow">
+    <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
-          <div className={`h-3 w-3 rounded-full ${colorClass}`} />
+          <div
+            className={`h-3 w-3 rounded-full ${
+              agentColors[prediction.agent_name] || 'bg-gray-500'
+            }`}
+          />
           <CardTitle className="text-base">
             {prediction.agent_name}
           </CardTitle>
@@ -46,26 +46,8 @@ export function AgentPredictionCard({ prediction }: AgentPredictionCardProps) {
       </CardHeader>
 
       <CardContent>
-        {/* METRICS */}
-        <div className="flex gap-4 mb-3">
-          <div>
-            <p className="text-xl font-bold">
-              {probability.toFixed(1)}%
-            </p>
-            <p className="text-xs text-muted-foreground">Estimate</p>
-          </div>
-
-          <div>
-            <p className="text-xl font-bold">
-              {confidence.toFixed(0)}%
-            </p>
-            <p className="text-xs text-muted-foreground">Confidence</p>
-          </div>
-        </div>
-
-        {/* REASONING */}
         <div className="text-sm">
-          <p className="font-medium mb-1">Reasoning:</p>
+          <p className="font-medium">Reasoning:</p>
 
           <p className={expanded ? '' : 'line-clamp-3 text-muted-foreground'}>
             {prediction.reasoning}
@@ -73,34 +55,32 @@ export function AgentPredictionCard({ prediction }: AgentPredictionCardProps) {
 
           <button
             onClick={() => setExpanded(!expanded)}
-            className="mt-1 text-xs text-primary hover:underline"
+            className="text-xs text-primary mt-1"
           >
-            {expanded ? 'Show less' : 'Read full reasoning'}
+            {expanded ? 'Show less' : 'Read more'}
           </button>
         </div>
 
         {/* SOURCES FIXED */}
-        {prediction.sources_used?.length > 0 && (
-          <div className="mt-4">
-            <p className="text-xs font-medium text-muted-foreground mb-1">
-              Sources
-            </p>
+        {prediction.sourcesUsed?.length ? (
+          <div className="mt-3">
+            <p className="text-xs font-medium mb-1">Sources</p>
 
             <div className="flex flex-col gap-1">
-              {prediction.sources_used.slice(0, 5).map((source, i) => (
+              {prediction.sourcesUsed.slice(0, 5).map((s, i) => (
                 <a
                   key={i}
-                  href={source.url}
+                  href={s.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-primary hover:underline line-clamp-1"
+                  className="text-xs text-blue-600 hover:underline line-clamp-1"
                 >
-                  {source.title}
+                  {s.title}
                 </a>
               ))}
             </div>
           </div>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   )
