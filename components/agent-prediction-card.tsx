@@ -24,6 +24,11 @@ const agentColors: Record<string, string> = {
   'Signal Scout': 'bg-red-500',
 }
 
+interface SourceItem {
+  title: string
+  url: string
+}
+
 export function AgentPredictionCard({
   prediction,
 }: AgentPredictionCardProps) {
@@ -34,6 +39,52 @@ export function AgentPredictionCard({
 
   const colorClass =
     agentColors[prediction.agent_name] || 'bg-gray-500'
+
+  const parsedSources: SourceItem[] = (() => {
+    if (!prediction.sources_used) {
+      return []
+    }
+
+    return prediction.sources_used
+      .map((source: any) => {
+        // new structured format
+        if (
+          typeof source === 'object' &&
+          source?.title
+        ) {
+          return {
+            title: source.title,
+            url: source.url || '',
+          }
+        }
+
+        // fallback old string format
+        if (typeof source === 'string') {
+          const titleMatch =
+            source.match(
+              /SOURCE_TITLE:\s*(.*?)(\n|$)/
+            )
+
+          const urlMatch =
+            source.match(
+              /SOURCE_URL:\s*(.*?)(\n|$)/
+            )
+
+          return {
+            title:
+              titleMatch?.[1] ||
+              source ||
+              'Unknown Source',
+
+            url: urlMatch?.[1] || '',
+          }
+        }
+
+        return null
+      })
+      .filter(Boolean)
+      .slice(0, 5) as SourceItem[]
+  })()
 
   return (
     <Card className="soft-shadow">
@@ -104,65 +155,41 @@ export function AgentPredictionCard({
         </div>
 
         {/* SOURCES */}
-        {prediction.sources_used &&
-          prediction.sources_used.length > 0 && (
-            <div className="mt-4">
-              <p className="mb-2 text-xs font-medium text-muted-foreground">
-                Sources
-              </p>
+        {parsedSources.length > 0 && (
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">
+              Sources
+            </p>
 
-              <div className="flex flex-col gap-1">
-                {prediction.sources_used
-                  .slice(0, 5)
-                  .map((source, i) => {
-                    let title = source
-                    let url = ''
+            <div className="flex flex-col gap-1">
+              {parsedSources.map((source, i) => {
+                if (!source.url) {
+                  return (
+                    <div
+                      key={i}
+                      className="truncate rounded bg-muted px-2 py-1 text-xs text-muted-foreground"
+                    >
+                      {source.title}
+                    </div>
+                  )
+                }
 
-                    const titleMatch =
-                      source.match(
-                        /SOURCE_TITLE:\s*(.*?)(\n|$)/
-                      )
-
-                    const urlMatch =
-                      source.match(
-                        /SOURCE_URL:\s*(.*?)(\n|$)/
-                      )
-
-                    if (titleMatch) {
-                      title = titleMatch[1]
-                    }
-
-                    if (urlMatch) {
-                      url = urlMatch[1]
-                    }
-
-                    if (!url) {
-                      return (
-                        <div
-                          key={i}
-                          className="truncate rounded bg-muted px-2 py-1 text-xs text-muted-foreground"
-                        >
-                          {title}
-                        </div>
-                      )
-                    }
-
-                    return (
-                      <a
-                        key={i}
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="truncate rounded bg-muted px-2 py-1 text-xs text-primary hover:underline"
-                        title={url}
-                      >
-                        {title}
-                      </a>
-                    )
-                  })}
-              </div>
+                return (
+                  <a
+                    key={i}
+                    href={source.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="truncate rounded bg-muted px-2 py-1 text-xs text-primary transition-colors hover:bg-muted/80 hover:underline"
+                    title={source.url}
+                  >
+                    {source.title}
+                  </a>
+                )
+              })}
             </div>
-          )}
+          </div>
+        )}
       </CardContent>
     </Card>
   )

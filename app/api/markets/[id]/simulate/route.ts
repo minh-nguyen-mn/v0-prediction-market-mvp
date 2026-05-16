@@ -46,7 +46,13 @@ const agentPredictionSchema = z.object({
 
   reasoning: z.string(),
 
-  sourcesUsed: z.array(z.string()),
+  // required to satisfy OpenAI structured outputs
+  sourcesUsed: z.array(
+    z.object({
+      title: z.string(),
+      url: z.string(),
+    })
+  ),
 })
 
 /* =========================
@@ -60,19 +66,34 @@ async function runAgentPrediction(
   const currentProb =
     getCurrentProbability(currentMarketState)
 
-  /* =========================
-     INDEPENDENT AGENT RESEARCH
-  ========================= */
-  let webContext = 'No context available'
+  let webResult = {
+    answer: 'No research available',
+    sources: [],
+  }
 
   try {
-    webContext = await fetchWebContext(
+    webResult = await fetchWebContext(
       market.question_clean,
       agent.searchApproach
     )
   } catch {
-    webContext = 'Web research failed'
+    webResult = {
+      answer: 'Web research failed',
+      sources: [],
+    }
   }
+
+  const webContext = [
+    webResult.answer,
+    ...webResult.sources.map(
+      (s) =>
+        `
+TITLE: ${s.title}
+URL: ${s.url}
+SNIPPET: ${s.content}
+`
+    ),
+  ].join('\n\n')
 
   try {
     const { object: prediction } =
@@ -114,11 +135,15 @@ ${webContext}
 Instructions:
 - Think independently
 - Stay faithful to your persona
-- Use your own interpretation of the evidence
+- Use your own interpretation of evidence
 - Avoid consensus thinking
-- Provide nuanced probabilistic reasoning
-- Confidence should reflect uncertainty realistically
-- sourcesUsed must contain the most relevant research sources from the provided evidence
+- Confidence should realistically reflect uncertainty
+- Use ONLY the supplied research context
+- sourcesUsed must contain EXACTLY 5 sources
+- Each source must contain:
+  - title
+  - url
+- Prefer the most relevant and diverse sources
 
 Return:
 - probability
@@ -128,13 +153,37 @@ Return:
 `,
       })
 
-    return prediction
+    const normalizedSources = webResult.sources
+      .slice(0, 5)
+      .map((source: any) => ({
+        title: source.title || source.url,
+        url: source.url,
+      }))
+
+    while (normalizedSources.length < 5) {
+      normalizedSources.push({
+        title: 'Additional research unavailable',
+        url: '',
+      })
+    }
+
+    return {
+      probability: prediction.probability,
+      confidence: prediction.confidence,
+      reasoning: prediction.reasoning,
+
+      // force consistency from Tavily results
+      sourcesUsed: normalizedSources,
+    }
   } catch {
     return {
       probability: currentProb,
+
       confidence: 0.2,
+
       reasoning:
         'Fallback prediction generated due to model failure.',
+
       sourcesUsed: [],
     }
   }
@@ -189,7 +238,7 @@ export async function POST(
     const results = []
 
     /* =========================
-       SEQUENTIAL MULTI-AGENT LOOP
+       MULTI AGENT LOOP
     ========================= */
     for (const agent of AGENT_CONFIGS) {
       const prediction =
@@ -243,9 +292,6 @@ export async function POST(
       }
     }
 
-    /* =========================
-       FINAL MARKET UPDATE
-    ========================= */
     const finalProbability =
       getCurrentProbability(currentState)
 
