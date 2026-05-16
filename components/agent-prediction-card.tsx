@@ -6,7 +6,7 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
+  CardTitle
 } from '@/components/ui/card'
 
 import type { AgentPrediction } from '@/lib/types'
@@ -23,18 +23,7 @@ const agentColors: Record<string, string> = {
   'News Ninja': 'bg-red-500',
 }
 
-function isValidHttpUrl(value: string) {
-  try {
-    const url = new URL(value)
-    return url.protocol === 'http:' || url.protocol === 'https:'
-  } catch {
-    return false
-  }
-}
-
-export function AgentPredictionCard({
-  prediction,
-}: AgentPredictionCardProps) {
+export function AgentPredictionCard({ prediction }: AgentPredictionCardProps) {
   const [expanded, setExpanded] = useState(false)
 
   const probability = Number(prediction.probability) * 100
@@ -42,7 +31,7 @@ export function AgentPredictionCard({
   const colorClass = agentColors[prediction.agent_name] || 'bg-gray-500'
 
   return (
-    <Card className="transition-all hover:shadow-md">
+    <Card className="soft-shadow">
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
           <div className={`h-3 w-3 rounded-full ${colorClass}`} />
@@ -58,7 +47,7 @@ export function AgentPredictionCard({
 
       <CardContent>
         {/* METRICS */}
-        <div className="mb-3 flex gap-6">
+        <div className="flex gap-4 mb-3">
           <div>
             <p className="text-xl font-bold">
               {probability.toFixed(1)}%
@@ -74,19 +63,13 @@ export function AgentPredictionCard({
           </div>
         </div>
 
-        {/* REASONING */}
+        {/* REASONING (FIXED: EXPANDABLE) */}
         <div className="text-sm">
-          <p className="mb-1 font-medium text-foreground">
-            Reasoning
-          </p>
+          <p className="font-medium mb-1">Reasoning:</p>
 
-          <div
-            className={`rounded-md bg-muted/40 p-2 text-sm leading-relaxed text-muted-foreground transition-all ${
-              expanded ? '' : 'max-h-28 overflow-hidden'
-            }`}
-          >
+          <p className={expanded ? '' : 'line-clamp-3 text-muted-foreground'}>
             {prediction.reasoning}
-          </div>
+          </p>
 
           <button
             onClick={() => setExpanded(!expanded)}
@@ -96,39 +79,26 @@ export function AgentPredictionCard({
           </button>
         </div>
 
-        {/* SOURCES */}
-        {prediction.sources_used &&
-          prediction.sources_used.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1">
-              {prediction.sources_used.map((source, i) => {
-                const isUrl = isValidHttpUrl(source)
-
-                if (isUrl) {
-                  return (
-                    <a
-                      key={i}
-                      href={source}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="rounded bg-muted px-2 py-0.5 text-xs text-primary hover:underline hover:opacity-80"
-                    >
-                      {new URL(source).hostname}
-                    </a>
-                  )
+        {/* SOURCES (FIXED: CLICKABLE LINKS) */}
+        {prediction.sources_used?.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1">
+            {prediction.sources_used.map((source, i) => (
+              <a
+                key={i}
+                href={
+                  source.startsWith('http')
+                    ? source
+                    : `https://${source}`
                 }
-
-                // IMPORTANT: non-URLs are NOT clickable
-                return (
-                  <span
-                    key={i}
-                    className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-                  >
-                    {source}
-                  </span>
-                )
-              })}
-            </div>
-          )}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded bg-muted px-2 py-0.5 text-xs text-primary hover:underline"
+              >
+                {source}
+              </a>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   )
