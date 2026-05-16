@@ -45,7 +45,7 @@ export function CreateMarketForm({ onMarketCreated }: CreateMarketFormProps) {
   }
 
   return (
-    <Card>
+    <Card className="soft-shadow">
       <CardHeader>
         <CardTitle>Create New Market</CardTitle>
         <CardDescription>
