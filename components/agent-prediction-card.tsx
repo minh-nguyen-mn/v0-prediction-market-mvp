@@ -79,24 +79,52 @@ export function AgentPredictionCard({ prediction }: AgentPredictionCardProps) {
           </button>
         </div>
 
-        {/* SOURCES (FIXED: CLICKABLE LINKS) */}
+        {/* SOURCES (FIXED: SMART LINK PARSING) */}
         {prediction.sources_used?.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-1">
-            {prediction.sources_used.map((source, i) => (
-              <a
-                key={i}
-                href={
-                  source.startsWith('http')
-                    ? source
-                    : `https://${source}`
+            {prediction.sources_used.map((source, i) => {
+              let url = ''
+              let label = source
+
+              // Case 1: already a URL
+              if (source.startsWith('http')) {
+                url = source
+                label = source.replace(/^https?:\/\//, '')
+              }
+
+              // Case 2: "TITLE | URL" or "TITLE - URL"
+              else if (source.includes('http')) {
+                const match = source.match(/(https?:\/\/\S+)/)
+                if (match) {
+                  url = match[1]
+                  label = source.split(match[1])[0].replace(/[-|:]/g, '').trim()
                 }
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded bg-muted px-2 py-0.5 text-xs text-primary hover:underline"
-              >
-                {source}
-              </a>
-            ))}
+              }
+
+              // fallback: no valid URL
+              if (!url) {
+                return (
+                  <span
+                    key={i}
+                    className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+                  >
+                    {source}
+                  </span>
+                )
+              }
+
+              return (
+                <a
+                  key={i}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded bg-muted px-2 py-0.5 text-xs text-primary hover:underline"
+                >
+                  {label || url}
+                </a>
+              )
+            })}
           </div>
         )}
       </CardContent>
