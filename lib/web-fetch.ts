@@ -1,14 +1,34 @@
 export async function fetchWebContext(query: string): Promise<string> {
-  try {
-    const res = await fetch('/api/web-fetch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query }),
-    })
+  const apiKey = process.env.TAVILY_API_KEY
 
-    const data = await res.json()
-    return data.content || 'No context available'
-  } catch (e) {
-    return 'Web fetch failed'
+  if (!apiKey) {
+    throw new Error('Missing TAVILY_API_KEY')
   }
+
+  const res = await fetch('https://api.tavily.com/search', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      query,
+      search_depth: 'advanced',
+      include_answer: true,
+      max_results: 5,
+    }),
+  })
+
+  const data = await res.json()
+
+  const context =
+    [
+      data.answer,
+      ...(data.results?.map((r: any) => `${r.title}: ${r.content}`) || []),
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+      .slice(0, 6000)
+
+  return context || 'No results'
 }
