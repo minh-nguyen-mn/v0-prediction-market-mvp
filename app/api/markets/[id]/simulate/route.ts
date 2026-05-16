@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { generateObject } from 'ai'
-import { openai, anthropic } from '@ai-sdk/openai'
+import { openai } from '@ai-sdk/openai'
+import { anthropic } from '@ai-sdk/anthropic'
 import { z } from 'zod'
 import { NextResponse } from 'next/server'
 import { AGENT_CONFIGS, type Market } from '@/lib/types'

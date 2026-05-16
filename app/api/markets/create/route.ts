@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { generateObject } from 'ai'
 import { z } from 'zod'
 import { NextResponse } from 'next/server'
-import { openai, anthropic } from '@ai-sdk/openai'
+import { openai } from '@ai-sdk/openai'
+import { anthropic } from '@ai-sdk/anthropic'
 
 /* =========================
    MODEL RESOLVER (SAFE)
