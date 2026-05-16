@@ -158,7 +158,7 @@ export async function POST(
           reasoning: prediction.reasoning,
 
           // IMPORTANT FIX: match DB field naming
-          sources_used: prediction.sourcesUsed,
+          sourcesUsed: prediction.sourcesUsed,
         })
         .select()
         .single()
