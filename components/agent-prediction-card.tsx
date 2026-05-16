@@ -6,7 +6,7 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle
+  CardTitle,
 } from '@/components/ui/card'
 
 import type { AgentPrediction } from '@/lib/types'
@@ -23,7 +23,18 @@ const agentColors: Record<string, string> = {
   'News Ninja': 'bg-red-500',
 }
 
-export function AgentPredictionCard({ prediction }: AgentPredictionCardProps) {
+function isValidHttpUrl(value: string) {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+export function AgentPredictionCard({
+  prediction,
+}: AgentPredictionCardProps) {
   const [expanded, setExpanded] = useState(false)
 
   const probability = Number(prediction.probability) * 100
@@ -31,7 +42,7 @@ export function AgentPredictionCard({ prediction }: AgentPredictionCardProps) {
   const colorClass = agentColors[prediction.agent_name] || 'bg-gray-500'
 
   return (
-    <Card className="soft-shadow">
+    <Card className="transition-all hover:shadow-md">
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
           <div className={`h-3 w-3 rounded-full ${colorClass}`} />
@@ -47,7 +58,7 @@ export function AgentPredictionCard({ prediction }: AgentPredictionCardProps) {
 
       <CardContent>
         {/* METRICS */}
-        <div className="flex gap-4 mb-3">
+        <div className="mb-3 flex gap-6">
           <div>
             <p className="text-xl font-bold">
               {probability.toFixed(1)}%
@@ -63,13 +74,19 @@ export function AgentPredictionCard({ prediction }: AgentPredictionCardProps) {
           </div>
         </div>
 
-        {/* REASONING (FIXED: EXPANDABLE) */}
+        {/* REASONING */}
         <div className="text-sm">
-          <p className="font-medium mb-1">Reasoning:</p>
-
-          <p className={expanded ? '' : 'line-clamp-3 text-muted-foreground'}>
-            {prediction.reasoning}
+          <p className="mb-1 font-medium text-foreground">
+            Reasoning
           </p>
+
+          <div
+            className={`rounded-md bg-muted/40 p-2 text-sm leading-relaxed text-muted-foreground transition-all ${
+              expanded ? '' : 'max-h-28 overflow-hidden'
+            }`}
+          >
+            {prediction.reasoning}
+          </div>
 
           <button
             onClick={() => setExpanded(!expanded)}
@@ -79,26 +96,39 @@ export function AgentPredictionCard({ prediction }: AgentPredictionCardProps) {
           </button>
         </div>
 
-        {/* SOURCES (FIXED: CLICKABLE LINKS) */}
-        {prediction.sources_used?.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1">
-            {prediction.sources_used.map((source, i) => (
-              <a
-                key={i}
-                href={
-                  source.startsWith('http')
-                    ? source
-                    : `https://${source}`
+        {/* SOURCES */}
+        {prediction.sources_used &&
+          prediction.sources_used.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1">
+              {prediction.sources_used.map((source, i) => {
+                const isUrl = isValidHttpUrl(source)
+
+                if (isUrl) {
+                  return (
+                    <a
+                      key={i}
+                      href={source}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded bg-muted px-2 py-0.5 text-xs text-primary hover:underline hover:opacity-80"
+                    >
+                      {new URL(source).hostname}
+                    </a>
+                  )
                 }
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded bg-muted px-2 py-0.5 text-xs text-primary hover:underline"
-              >
-                {source}
-              </a>
-            ))}
-          </div>
-        )}
+
+                // IMPORTANT: non-URLs are NOT clickable
+                return (
+                  <span
+                    key={i}
+                    className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+                  >
+                    {source}
+                  </span>
+                )
+              })}
+            </div>
+          )}
       </CardContent>
     </Card>
   )
