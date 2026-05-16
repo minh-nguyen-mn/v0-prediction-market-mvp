@@ -1,15 +1,9 @@
-import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
-import { Analytics } from '@vercel/analytics/next'
-import { Toaster } from '@/components/ui/toaster'
-import './globals.css'
-
-const geist = Geist({ subsets: ['latin'] })
-const geistMono = Geist_Mono({ subsets: ['latin'] })
+import type { Metadata } from "next"
+import "./globals.css"
 
 export const metadata: Metadata = {
-  title: 'Probabylon',
-  description: 'AI Prediction Market Engine',
+  title: "Probabylon",
+  description: "Multi-Agent Prediction Markets",
 }
 
 export default function RootLayout({
@@ -19,10 +13,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${geist.className} ${geistMono.className}`}>
+      <body className="min-h-screen bg-background text-foreground antialiased">
         {children}
-        <Toaster />
-        <Analytics />
       </body>
     </html>
   )
