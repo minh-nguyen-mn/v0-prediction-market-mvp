@@ -13,11 +13,6 @@ export interface Market {
   expires_at: string
 }
 
-export interface Source {
-  title: string
-  url: string
-}
-
 export interface AgentPrediction {
   id: string
   market_id: string
@@ -26,12 +21,7 @@ export interface AgentPrediction {
   confidence: number
   trade_size: number
   reasoning: string
-
-  /**
-   * Structured sources
-   */
-  sourcesUsed: Source[] | null
-
+  sources_used: string[] | null
   created_at: string
 }
 
@@ -62,66 +52,97 @@ export interface AgentConfig {
   persona: string
   biases: string[]
   informationSources: string[]
+  searchApproach: string
 }
 
 export const AGENT_CONFIGS: AgentConfig[] = [
   {
-    name: 'Analyst Alpha',
+    name: 'Quant Sigma',
     persona:
-      'A quantitative analyst who builds probabilistic models using structured data, statistics, and historical trends.',
-    biases: ['overconfidence in models', 'underweighting rare events'],
-    informationSources: [
-      'statistical datasets',
-      'historical trends',
-      'market signals',
+      'A rigorous quantitative forecaster focused on statistical inference, probabilities, prediction markets, and historical modeling.',
+    biases: [
+      'overconfidence in statistical regularities',
+      'underweighting emotional narratives',
     ],
+    informationSources: [
+      'historical datasets',
+      'prediction markets',
+      'statistical models',
+      'quantitative research',
+    ],
+    searchApproach:
+      'Focus on statistics, probabilities, odds, quantitative forecasts, historical performance, and prediction market data.',
   },
 
   {
-    name: 'Base Rate Betty',
+    name: 'Macro Maven',
     persona:
-      'A strict base-rate thinker who heavily relies on historical frequencies and reference classes.',
-    biases: ['anchoring bias', 'resistance to novel narratives'],
-    informationSources: [
-      'historical frequencies',
-      'archives',
-      'long-term datasets',
+      'A macro and systems thinker who analyzes geopolitical, economic, institutional, and structural forces.',
+    biases: [
+      'macro-overgeneralization',
+      'overweighting structural trends',
     ],
-  },
-
-  {
-    name: 'Market Maker Max',
-    persona:
-      'A pricing strategist who focuses on inefficiencies between market price and implied probability.',
-    biases: ['over-optimization of short-term arbitrage'],
     informationSources: [
-      'market odds',
-      'betting markets',
-      'liquidity signals',
+      'global news',
+      'economic indicators',
+      'institutional analysis',
+      'geopolitical reporting',
     ],
+    searchApproach:
+      'Focus on macro trends, institutions, economic conditions, geopolitical dynamics, and large-scale structural drivers.',
   },
 
   {
     name: 'Contrarian Charlie',
     persona:
-      'A skeptical analyst who actively challenges consensus and searches for overlooked risks and failure modes.',
-    biases: ['contrarian bias', 'overweighting tail risks'],
+      'A skeptical contrarian who searches for hidden risks, failure modes, blind spots, and tail-risk scenarios.',
+    biases: [
+      'contrarian bias',
+      'overweighting downside scenarios',
+    ],
     informationSources: [
       'critical analysis',
       'alternative viewpoints',
-      'failure case studies',
+      'failure cases',
+      'risk discussions',
     ],
+    searchApproach:
+      'Focus on criticisms, downside risks, overlooked weaknesses, uncertainty, instability, and unexpected failure scenarios.',
   },
 
   {
-    name: 'Information Hunter Iris',
+    name: 'Base Rate Betty',
     persona:
-      'A real-time intelligence agent that prioritizes breaking news, updates, and rapidly changing information.',
-    biases: ['recency bias', 'overreaction to news flow'],
+      'A disciplined forecaster anchored heavily to historical base rates and long-run empirical frequencies.',
+    biases: [
+      'anchoring bias',
+      'underweighting novel developments',
+    ],
+    informationSources: [
+      'historical precedents',
+      'reference classes',
+      'long-run statistics',
+      'empirical frequencies',
+    ],
+    searchApproach:
+      'Focus on historical analogs, long-term precedent, base rates, empirical frequencies, and reference classes.',
+  },
+
+  {
+    name: 'Signal Scout',
+    persona:
+      'A fast-moving information analyst focused on emerging signals, momentum, sentiment shifts, and recent developments.',
+    biases: [
+      'recency bias',
+      'overreacting to new information',
+    ],
     informationSources: [
       'breaking news',
-      'live updates',
-      'social media trends',
+      'recent updates',
+      'social sentiment',
+      'current events',
     ],
+    searchApproach:
+      'Focus on recent developments, emerging signals, breaking news, momentum shifts, and current sentiment.',
   },
 ]

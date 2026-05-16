@@ -1,30 +1,16 @@
-export interface WebSource {
-  title: string
-  url: string
-  content: string
-}
-
-export interface WebContextResult {
-  answer: string
-  sources: WebSource[]
-}
-
-/**
- * Agent-diversified web retrieval
- * Each agent receives a different retrieval lens
- * so they no longer share identical evidence.
- */
 export async function fetchWebContext(
   query: string,
-  agentName?: string
-): Promise<WebContextResult> {
+  searchApproach?: string
+): Promise<string> {
   const apiKey = process.env.TAVILY_API_KEY
 
   if (!apiKey) {
     throw new Error('Missing TAVILY_API_KEY')
   }
 
-  const diversifiedQuery = diversifyQuery(query, agentName)
+  const enhancedQuery = searchApproach
+    ? `${searchApproach} ${query}`
+    : query
 
   const res = await fetch('https://api.tavily.com/search', {
     method: 'POST',
@@ -33,88 +19,36 @@ export async function fetchWebContext(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      query: diversifiedQuery,
+      query: enhancedQuery,
       search_depth: 'advanced',
       include_answer: true,
-      max_results: 10,
+      max_results: 8,
     }),
   })
 
-  if (!res.ok) {
-    throw new Error(`Tavily search failed: ${res.status}`)
-  }
-
   const data = await res.json()
 
-  const allSources: WebSource[] =
-    (data.results || []).map((r: any) => ({
-      title: r.title || 'Untitled Source',
-      url: r.url || '',
-      content: r.content || '',
-    })) || []
+  const formattedSources =
+    (data.results || [])
+      .slice(0, 5)
+      .map((r: any) => {
+        return [
+          `SOURCE_TITLE: ${r.title}`,
+          `SOURCE_URL: ${r.url}`,
+          `SOURCE_SNIPPET: ${r.content}`,
+        ].join('\n')
+      })
+      .join('\n\n')
 
-  /**
-   * Deduplicate by URL
-   */
-  const uniqueMap = new Map<string, WebSource>()
+  const contextParts = [
+    data.answer ? `ANSWER: ${data.answer}` : null,
+    formattedSources,
+  ]
 
-  for (const source of allSources) {
-    if (!source.url) continue
+  const context = contextParts
+    .filter(Boolean)
+    .join('\n\n')
+    .slice(0, 7000)
 
-    if (!uniqueMap.has(source.url)) {
-      uniqueMap.set(source.url, source)
-    }
-  }
-
-  const uniqueSources = Array.from(uniqueMap.values())
-
-  /**
-   * Return more than 5 internally
-   * UI can decide how many to render
-   */
-  return {
-    answer: data.answer || '',
-    sources: uniqueSources.slice(0, 8),
-  }
-}
-
-/**
- * Core diversification logic
- * This is what makes agents independently research.
- */
-function diversifyQuery(query: string, agent?: string): string {
-  switch (agent) {
-    case 'Analyst Alpha':
-      return `
-${query}
-statistical forecast probability models prediction data analysis historical performance
-`
-
-    case 'Base Rate Betty':
-      return `
-${query}
-historical frequencies base rates long-term outcomes archives statistics prior cases
-`
-
-    case 'Market Maker Max':
-      return `
-${query}
-betting odds implied probability prediction market pricing bookmaker consensus
-`
-
-    case 'Contrarian Charlie':
-      return `
-${query}
-arguments against consensus hidden risks upset scenarios failure cases skepticism
-`
-
-    case 'Information Hunter Iris':
-      return `
-${query}
-breaking news latest developments current updates reports social sentiment
-`
-
-    default:
-      return query
-  }
+  return context || 'No results'
 }
