@@ -4,60 +4,70 @@ import { openai } from '@ai-sdk/openai'
 import { anthropic } from '@ai-sdk/anthropic'
 import { z } from 'zod'
 import { NextResponse } from 'next/server'
+
 import { AGENT_CONFIGS, type Market } from '@/lib/types'
-import { executeAgentTrade, getCurrentProbability, type MarketState } from '@/lib/lmsr'
+import {
+  executeAgentTrade,
+  getCurrentProbability,
+  type MarketState
+} from '@/lib/lmsr'
+
 import { fetchWebContext } from '@/lib/web-fetch'
 
 /* =========================
-   LLM MODEL RESOLVER
+   MODEL
 ========================= */
 function getModel() {
   const provider = process.env.LLM_PROVIDER
 
-  switch (provider) {
-    case 'anthropic':
-      return anthropic('claude-3-5-sonnet-latest')
-
-    case 'openai':
-      return openai('gpt-4o-mini')
-
-    default:
-      return openai('gpt-4o-mini')
+  if (provider === 'anthropic') {
+    return anthropic('claude-3-5-sonnet-latest')
   }
+
+  return openai('gpt-4o-mini')
 }
 
 /* =========================
-   SCHEMA
+   SCHEMA (unchanged logic but improved clarity)
 ========================= */
 const agentPredictionSchema = z.object({
   probability: z.number().min(0.01).max(0.99),
   confidence: z.number().min(0.1).max(1.0),
   reasoning: z.string(),
-  sourcesUsed: z.array(z.string()),
+
+  // still strings from LLM, but we will override with real sources
+  sourcesUsed: z.array(z.string()).optional(),
 })
 
 /* =========================
-   AGENT FUNCTION
+   AGENT RUNNER (FIXED)
 ========================= */
 async function runAgentPrediction(
   agent: typeof AGENT_CONFIGS[0],
   market: Market,
-  currentMarketState: MarketState,
-  webContext: string
+  currentMarketState: MarketState
 ) {
   const currentProb = getCurrentProbability(currentMarketState)
 
-  try {
-    const { object: prediction } = await generateObject({
-      model: getModel(),
-      schema: agentPredictionSchema,
-      prompt: `
-You are ${agent.name}, ${agent.persona}
+  // 🔥 FIX #1: agent-specific web search
+  const web = await fetchWebContext(market.question_clean, agent.name)
+
+  const webContext = [
+    web.answer,
+    web.sources.map(s => `${s.title}: ${s.content}`).join('\n')
+  ].join('\n\n')
+
+  const { object: prediction } = await generateObject({
+    model: getModel(),
+    schema: agentPredictionSchema,
+    prompt: `
+You are ${agent.name}.
+Persona: ${agent.persona}
 
 Biases: ${agent.biases.join(', ')}
 Preferred sources: ${agent.informationSources.join(', ')}
 
-Market Question:
+Market:
 ${market.question_clean}
 
 Resolution:
@@ -66,35 +76,34 @@ ${market.resolution_criteria}
 Category:
 ${market.category}
 
-Current Probability:
-${(currentProb * 100).toFixed(1)}%
+Current probability: ${(currentProb * 100).toFixed(2)}%
 
-Web Context:
+Web evidence:
 ${webContext}
 
 Return:
-- probability
-- confidence
+- probability (0-1)
+- confidence (0-1)
 - reasoning
-- sourcesUsed
 
-Be consistent with your persona and biases.
+Be faithful to your persona.
 `,
-    })
+  })
 
-    return prediction
-  } catch (e) {
-    return {
-      probability: currentProb,
-      confidence: 0.2,
-      reasoning: 'Fallback due to LLM failure',
-      sourcesUsed: [],
-    }
+  // 🔥 FIX #2: override LLM sources with REAL structured sources
+  const structuredSources = web.sources.slice(0, 5).map(s => ({
+    title: s.title,
+    url: s.url,
+  }))
+
+  return {
+    ...prediction,
+    sourcesUsed: structuredSources,
   }
 }
 
 /* =========================
-   MAIN ROUTE
+   ROUTE
 ========================= */
 export async function POST(
   request: Request,
@@ -121,48 +130,35 @@ export async function POST(
 
     const probabilityBefore = Number(market.current_probability)
 
-    let currentState: MarketState = {
+    let state: MarketState = {
       yesShares: Number(market.yes_shares),
       noShares: Number(market.no_shares),
       liquidityParam: Number(market.liquidity_param),
     }
 
-    /* =========================
-       WEB CONTEXT (DIRECT CALL)
-    ========================= */
-    let webContext = 'No context available'
-    try {
-      webContext = await fetchWebContext(market.question_clean)
-    } catch {
-      webContext = 'Web fetch failed'
-    }
-
     const results = []
 
     /* =========================
-       5 AGENT LOOP (SEQUENTIAL)
+       AGENT LOOP (NOW FULLY INDEPENDENT)
     ========================= */
     for (const agent of AGENT_CONFIGS) {
-      const prediction = await runAgentPrediction(
-        agent,
-        market as Market,
-        currentState,
-        webContext
-      )
+
+      // 🔥 FIX #3: each agent has independent retrieval already inside runner
+      const prediction = await runAgentPrediction(agent, market as Market, state)
 
       const tradeSize = Math.max(5, Math.floor(prediction.confidence * 100))
 
-      const tradeResult = executeAgentTrade(
-        currentState,
+      const trade = executeAgentTrade(
+        state,
         prediction.probability,
         prediction.confidence,
         tradeSize
       )
 
-      currentState = {
-        yesShares: tradeResult.newYesShares,
-        noShares: tradeResult.newNoShares,
-        liquidityParam: currentState.liquidityParam,
+      state = {
+        yesShares: trade.newYesShares,
+        noShares: trade.newNoShares,
+        liquidityParam: state.liquidityParam,
       }
 
       const { data: saved } = await supabase
@@ -174,6 +170,8 @@ export async function POST(
           confidence: prediction.confidence,
           trade_size: tradeSize,
           reasoning: prediction.reasoning,
+
+          // 🔥 FIXED: structured sources
           sources_used: prediction.sourcesUsed,
         })
         .select()
@@ -182,17 +180,14 @@ export async function POST(
       if (saved) results.push(saved)
     }
 
-    /* =========================
-       FINAL LMSR UPDATE
-    ========================= */
-    const finalProbability = getCurrentProbability(currentState)
+    const finalProbability = getCurrentProbability(state)
 
     await supabase
       .from('markets')
       .update({
         current_probability: finalProbability,
-        yes_shares: currentState.yesShares,
-        no_shares: currentState.noShares,
+        yes_shares: state.yesShares,
+        no_shares: state.noShares,
       })
       .eq('id', id)
 
@@ -206,8 +201,8 @@ export async function POST(
       market: {
         ...market,
         current_probability: finalProbability,
-        yes_shares: currentState.yesShares,
-        no_shares: currentState.noShares,
+        yes_shares: state.yesShares,
+        no_shares: state.noShares,
       },
       predictions: results,
       probabilityChange: {
@@ -215,8 +210,8 @@ export async function POST(
         after: finalProbability,
       },
     })
-  } catch (error) {
-    console.error('Simulation error:', error)
+  } catch (err) {
+    console.error(err)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

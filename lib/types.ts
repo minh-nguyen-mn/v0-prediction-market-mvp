@@ -13,6 +13,17 @@ export interface Market {
   expires_at: string
 }
 
+/**
+ * ✅ FIXED: structured sources (critical upgrade)
+ * - supports title + url
+ * - enables clean UI rendering
+ * - removes raw URL spam problem
+ */
+export interface Source {
+  title: string
+  url: string
+}
+
 export interface AgentPrediction {
   id: string
   market_id: string
@@ -21,7 +32,13 @@ export interface AgentPrediction {
   confidence: number
   trade_size: number
   reasoning: string
-  sources_used: string[] | null
+
+  /**
+   * BEFORE: string[] ❌ (caused garbage UI + duplication)
+   * AFTER: structured sources ✔
+   */
+  sources_used: Source[] | null
+
   created_at: string
 }
 
@@ -57,32 +74,41 @@ export interface AgentConfig {
 export const AGENT_CONFIGS: AgentConfig[] = [
   {
     name: 'Analyst Alpha',
-    persona: 'A data-driven quantitative analyst who relies heavily on historical patterns and statistical models.',
-    biases: ['overconfidence in quantitative methods', 'underweighting qualitative factors'],
-    informationSources: ['historical data', 'statistical models', 'market trends'],
+    persona:
+      'A quantitative analyst who builds probabilistic models using structured data, statistics, and historical trends.',
+    biases: ['overconfidence in models', 'underweighting rare events'],
+    informationSources: ['statistical datasets', 'historical trends', 'market signals'],
   },
-  {
-    name: 'Pundit Prime',
-    persona: 'A seasoned political commentator with deep connections and insider knowledge.',
-    biases: ['overweighting insider information', 'confirmation bias toward establishment views'],
-    informationSources: ['insider sources', 'political networks', 'news analysis'],
-  },
-  {
-    name: 'Contrarian Charlie',
-    persona: 'A skeptical analyst who always looks for overlooked factors and contrarian views.',
-    biases: ['contrarian bias', 'tendency to overweight tail risks'],
-    informationSources: ['alternative media', 'minority opinions', 'historical upsets'],
-  },
+
   {
     name: 'Base Rate Betty',
-    persona: 'A methodical analyst who anchors strongly to base rates and reference classes.',
-    biases: ['anchoring to base rates', 'underweighting unique circumstances'],
-    informationSources: ['reference classes', 'historical base rates', 'statistical averages'],
+    persona:
+      'A strict base-rate thinker who heavily relies on historical frequencies and reference classes.',
+    biases: ['anchoring bias', 'resistance to novel narratives'],
+    informationSources: ['historical frequencies', 'archives', 'long-term datasets'],
   },
+
   {
-    name: 'News Ninja',
-    persona: 'A real-time information aggregator who weights recent news heavily.',
-    biases: ['recency bias', 'overreaction to news'],
-    informationSources: ['breaking news', 'social media trends', 'real-time data'],
+    name: 'Market Maker Max',
+    persona:
+      'A pricing strategist who focuses on inefficiencies between market price and implied probability.',
+    biases: ['over-optimization of short-term arbitrage'],
+    informationSources: ['market odds', 'betting markets', 'liquidity signals'],
+  },
+
+  {
+    name: 'Contrarian Charlie',
+    persona:
+      'A skeptical analyst who actively challenges consensus and searches for overlooked risks and failure modes.',
+    biases: ['contrarian bias', 'overweighting tail risks'],
+    informationSources: ['critical analysis', 'alternative viewpoints', 'failure case studies'],
+  },
+
+  {
+    name: 'Information Hunter Iris',
+    persona:
+      'A real-time intelligence agent that prioritizes breaking news, updates, and rapidly changing information.',
+    biases: ['recency bias', 'overreaction to news flow'],
+    informationSources: ['breaking news', 'live updates', 'social media trends'],
   },
 ]

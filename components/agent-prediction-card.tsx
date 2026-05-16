@@ -17,10 +17,10 @@ interface AgentPredictionCardProps {
 
 const agentColors: Record<string, string> = {
   'Analyst Alpha': 'bg-blue-500',
-  'Pundit Prime': 'bg-purple-500',
-  'Contrarian Charlie': 'bg-orange-500',
   'Base Rate Betty': 'bg-green-500',
-  'News Ninja': 'bg-red-500',
+  'Contrarian Charlie': 'bg-orange-500',
+  'Market Maker Max': 'bg-purple-500',
+  'Information Hunter Iris': 'bg-red-500',
 }
 
 export function AgentPredictionCard({ prediction }: AgentPredictionCardProps) {
@@ -63,7 +63,7 @@ export function AgentPredictionCard({ prediction }: AgentPredictionCardProps) {
           </div>
         </div>
 
-        {/* REASONING (FIXED: EXPANDABLE) */}
+        {/* REASONING */}
         <div className="text-sm">
           <p className="font-medium mb-1">Reasoning:</p>
 
@@ -79,52 +79,26 @@ export function AgentPredictionCard({ prediction }: AgentPredictionCardProps) {
           </button>
         </div>
 
-        {/* SOURCES (FIXED: SMART LINK PARSING) */}
+        {/* SOURCES FIXED */}
         {prediction.sources_used?.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1">
-            {prediction.sources_used.map((source, i) => {
-              let url = ''
-              let label = source
+          <div className="mt-4">
+            <p className="text-xs font-medium text-muted-foreground mb-1">
+              Sources
+            </p>
 
-              // Case 1: already a URL
-              if (source.startsWith('http')) {
-                url = source
-                label = source.replace(/^https?:\/\//, '')
-              }
-
-              // Case 2: "TITLE | URL" or "TITLE - URL"
-              else if (source.includes('http')) {
-                const match = source.match(/(https?:\/\/\S+)/)
-                if (match) {
-                  url = match[1]
-                  label = source.split(match[1])[0].replace(/[-|:]/g, '').trim()
-                }
-              }
-
-              // fallback: no valid URL
-              if (!url) {
-                return (
-                  <span
-                    key={i}
-                    className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-                  >
-                    {source}
-                  </span>
-                )
-              }
-
-              return (
+            <div className="flex flex-col gap-1">
+              {prediction.sources_used.slice(0, 5).map((source, i) => (
                 <a
                   key={i}
-                  href={url}
+                  href={source.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="rounded bg-muted px-2 py-0.5 text-xs text-primary hover:underline"
+                  className="text-xs text-primary hover:underline line-clamp-1"
                 >
-                  {label || url}
+                  {source.title}
                 </a>
-              )
-            })}
+              ))}
+            </div>
           </div>
         )}
       </CardContent>
