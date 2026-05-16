@@ -1,17 +1,43 @@
 import { createClient } from '@/lib/supabase/server'
 import { generateObject } from 'ai'
+import { openai, anthropic } from '@ai-sdk/openai'
 import { z } from 'zod'
 import { NextResponse } from 'next/server'
 import { AGENT_CONFIGS, type Market } from '@/lib/types'
 import { executeAgentTrade, getCurrentProbability, type MarketState } from '@/lib/lmsr'
+import { fetchWebContext } from '@/lib/web-fetch'
 
+/* =========================
+   LLM MODEL RESOLVER
+========================= */
+function getModel() {
+  const provider = process.env.LLM_PROVIDER
+
+  switch (provider) {
+    case 'anthropic':
+      return anthropic('claude-3-5-sonnet-latest')
+
+    case 'openai':
+      return openai('gpt-4o-mini')
+
+    default:
+      return openai('gpt-4o-mini')
+  }
+}
+
+/* =========================
+   SCHEMA
+========================= */
 const agentPredictionSchema = z.object({
-  probability: z.number().min(0.01).max(0.99).describe('Predicted probability between 0.01 and 0.99'),
-  confidence: z.number().min(0.1).max(1.0).describe('Confidence level between 0.1 and 1.0'),
-  reasoning: z.string().describe('Detailed reasoning for this prediction'),
-  sourcesUsed: z.array(z.string()).describe('List of information sources consulted'),
+  probability: z.number().min(0.01).max(0.99),
+  confidence: z.number().min(0.1).max(1.0),
+  reasoning: z.string(),
+  sourcesUsed: z.array(z.string()),
 })
 
+/* =========================
+   AGENT FUNCTION
+========================= */
 async function runAgentPrediction(
   agent: typeof AGENT_CONFIGS[0],
   market: Market,
@@ -19,34 +45,56 @@ async function runAgentPrediction(
   webContext: string
 ) {
   const currentProb = getCurrentProbability(currentMarketState)
-  
-  const { object: prediction } = await generateObject({
-    model: 'anthropic/claude-sonnet-4-20250514',
-    schema: agentPredictionSchema,
-    prompt: `You are ${agent.name}, ${agent.persona}
 
-Your known biases are: ${agent.biases.join(', ')}
-Your preferred information sources are: ${agent.informationSources.join(', ')}
+  try {
+    const { object: prediction } = await generateObject({
+      model: getModel(),
+      schema: agentPredictionSchema,
+      prompt: `
+You are ${agent.name}, ${agent.persona}
 
-You are evaluating a prediction market:
-Question: ${market.question_clean}
-Resolution criteria: ${market.resolution_criteria}
-Category: ${market.category}
-Expires: ${market.expires_at}
+Biases: ${agent.biases.join(', ')}
+Preferred sources: ${agent.informationSources.join(', ')}
 
-Current market probability: ${(currentProb * 100).toFixed(1)}%
+Market Question:
+${market.question_clean}
 
-Here is recent web information that may be relevant:
+Resolution:
+${market.resolution_criteria}
+
+Category:
+${market.category}
+
+Current Probability:
+${(currentProb * 100).toFixed(1)}%
+
+Web Context:
 ${webContext}
 
-Based on your persona, biases, and the available information, provide your probability estimate.
-Be true to your character's biases - they should influence your estimate.
-Provide detailed reasoning that reflects your analytical approach.`,
-  })
+Return:
+- probability
+- confidence
+- reasoning
+- sourcesUsed
 
-  return prediction
+Be consistent with your persona and biases.
+`,
+    })
+
+    return prediction
+  } catch (e) {
+    return {
+      probability: currentProb,
+      confidence: 0.2,
+      reasoning: 'Fallback due to LLM failure',
+      sourcesUsed: [],
+    }
+  }
 }
 
+/* =========================
+   MAIN ROUTE
+========================= */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -54,102 +102,91 @@ export async function POST(
   try {
     const { id } = await params
     const supabase = await createClient()
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get the market
-    const { data: market, error: marketError } = await supabase
+    const { data: market } = await supabase
       .from('markets')
       .select('*')
       .eq('id', id)
       .single()
 
-    if (marketError || !market) {
+    if (!market) {
       return NextResponse.json({ error: 'Market not found' }, { status: 404 })
     }
 
-    // Fetch web context for the market question
-    let webContext = 'No additional web context available.'
-    try {
-      const webResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/web-fetch`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: market.question_clean }),
-        }
-      )
-      if (webResponse.ok) {
-        const webData = await webResponse.json()
-        webContext = webData.content || webContext
-      }
-    } catch (e) {
-      console.log('Web fetch failed, proceeding without web context:', e)
-    }
-
     const probabilityBefore = Number(market.current_probability)
-    
+
     let currentState: MarketState = {
       yesShares: Number(market.yes_shares),
       noShares: Number(market.no_shares),
       liquidityParam: Number(market.liquidity_param),
     }
 
-    const predictions = []
+    /* =========================
+       WEB CONTEXT (DIRECT CALL)
+    ========================= */
+    let webContext = 'No context available'
+    try {
+      webContext = await fetchWebContext(market.question_clean)
+    } catch {
+      webContext = 'Web fetch failed'
+    }
 
-    // Run each agent sequentially (they react to each other's trades)
-    for (const agentConfig of AGENT_CONFIGS) {
+    const results = []
+
+    /* =========================
+       5 AGENT LOOP (SEQUENTIAL)
+    ========================= */
+    for (const agent of AGENT_CONFIGS) {
       const prediction = await runAgentPrediction(
-        agentConfig,
+        agent,
         market as Market,
         currentState,
         webContext
       )
 
-      // Execute the agent's trade
+      const tradeSize = Math.max(5, Math.floor(prediction.confidence * 100))
+
       const tradeResult = executeAgentTrade(
         currentState,
         prediction.probability,
         prediction.confidence,
-        10 // max trade size
+        tradeSize
       )
 
-      // Update market state for next agent
       currentState = {
-        ...currentState,
         yesShares: tradeResult.newYesShares,
         noShares: tradeResult.newNoShares,
+        liquidityParam: currentState.liquidityParam,
       }
 
-      // Save the prediction
-      const { data: savedPrediction, error: predError } = await supabase
+      const { data: saved } = await supabase
         .from('agent_predictions')
         .insert({
           market_id: id,
-          agent_name: agentConfig.name,
+          agent_name: agent.name,
           probability: prediction.probability,
           confidence: prediction.confidence,
-          trade_size: tradeResult.quantity,
+          trade_size: tradeSize,
           reasoning: prediction.reasoning,
           sources_used: prediction.sourcesUsed,
         })
         .select()
         .single()
 
-      if (predError) {
-        console.error('Error saving prediction:', predError)
-      } else {
-        predictions.push(savedPrediction)
-      }
+      if (saved) results.push(saved)
     }
 
-    // Update market with final state
+    /* =========================
+       FINAL LMSR UPDATE
+    ========================= */
     const finalProbability = getCurrentProbability(currentState)
-    
-    const { error: updateError } = await supabase
+
+    await supabase
       .from('markets')
       .update({
         current_probability: finalProbability,
@@ -158,11 +195,6 @@ export async function POST(
       })
       .eq('id', id)
 
-    if (updateError) {
-      console.error('Error updating market:', updateError)
-    }
-
-    // Save simulation run
     await supabase.from('simulation_runs').insert({
       market_id: id,
       probability_before: probabilityBefore,
@@ -176,14 +208,17 @@ export async function POST(
         yes_shares: currentState.yesShares,
         no_shares: currentState.noShares,
       },
-      predictions,
+      predictions: results,
       probabilityChange: {
         before: probabilityBefore,
         after: finalProbability,
       },
     })
   } catch (error) {
-    console.error('Error in simulation:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('Simulation error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
   }
 }
