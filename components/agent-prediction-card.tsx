@@ -7,7 +7,7 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle
+  CardTitle,
 } from '@/components/ui/card'
 
 import type { AgentPrediction } from '@/lib/types'
@@ -29,11 +29,21 @@ export function AgentPredictionCard({
 }: AgentPredictionCardProps) {
   const [expanded, setExpanded] = useState(false)
 
-  const probability = Number(prediction.probability) * 100
-  const confidence = Number(prediction.confidence) * 100
+  const probability =
+    Number(prediction.probability) * 100
+
+  const confidence =
+    Number(prediction.confidence) * 100
 
   const colorClass =
-    agentColors[prediction.agent_name] || 'bg-gray-500'
+    agentColors[prediction.agent_name] ||
+    'bg-gray-500'
+
+  const parsedSources = Array.isArray(
+    prediction.sources_used
+  )
+    ? prediction.sources_used
+    : []
 
   return (
     <Card className="soft-shadow">
@@ -104,65 +114,48 @@ export function AgentPredictionCard({
         </div>
 
         {/* SOURCES */}
-        {prediction.sources_used &&
-          prediction.sources_used.length > 0 && (
-            <div className="mt-4">
-              <p className="mb-2 text-xs font-medium text-muted-foreground">
-                Sources
-              </p>
+        {parsedSources.length > 0 && (
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">
+              Sources
+            </p>
 
-              <div className="flex flex-col gap-1">
-                {prediction.sources_used
-                  .slice(0, 5)
-                  .map((source, i) => {
-                    let title = source
-                    let url = ''
+            <div className="flex flex-col gap-2">
+              {parsedSources
+                .slice(0, 5)
+                .map((source: any, i: number) => {
+                  const title =
+                    source?.title ||
+                    'Untitled Source'
 
-                    const titleMatch =
-                      source.match(
-                        /SOURCE_TITLE:\s*(.*?)(\n|$)/
-                      )
+                  const url = source?.url || ''
 
-                    const urlMatch =
-                      source.match(
-                        /SOURCE_URL:\s*(.*?)(\n|$)/
-                      )
+                  if (!url) {
+                    return null
+                  }
 
-                    if (titleMatch) {
-                      title = titleMatch[1]
-                    }
-
-                    if (urlMatch) {
-                      url = urlMatch[1]
-                    }
-
-                    if (!url) {
-                      return (
-                        <div
-                          key={i}
-                          className="truncate rounded bg-muted px-2 py-1 text-xs text-muted-foreground"
-                        >
-                          {title}
-                        </div>
-                      )
-                    }
-
-                    return (
-                      <a
-                        key={i}
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="truncate rounded bg-muted px-2 py-1 text-xs text-primary hover:underline"
-                        title={url}
-                      >
+                  return (
+                    <a
+                      key={i}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={url}
+                      className="group rounded-md border bg-muted/40 px-3 py-2 transition hover:bg-muted"
+                    >
+                      <div className="truncate text-xs font-medium text-primary group-hover:underline">
                         {title}
-                      </a>
-                    )
-                  })}
-              </div>
+                      </div>
+
+                      <div className="truncate text-[10px] text-muted-foreground">
+                        {url}
+                      </div>
+                    </a>
+                  )
+                })}
             </div>
-          )}
+          </div>
+        )}
       </CardContent>
     </Card>
   )
