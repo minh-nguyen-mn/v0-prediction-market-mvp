@@ -62,12 +62,12 @@ export function AgentPredictionCard({
         </div>
 
         {/* SOURCES FIXED */}
-        {prediction.sourcesUsed?.length ? (
+        {prediction.sources_used?.length ? (
           <div className="mt-3">
             <p className="text-xs font-medium mb-1">Sources</p>
 
             <div className="flex flex-col gap-1">
-              {prediction.sourcesUsed.slice(0, 5).map((s, i) => (
+              {prediction.sources_used.slice(0, 5).map((s, i) => (
                 <a
                   key={i}
                   href={s.url}

@@ -34,7 +34,7 @@ export interface Source {
  * AGENT PREDICTION (FIXED CORE MODEL)
  * =========================
  * IMPORTANT FIXES:
- * - sourcesUsed is structured (NOT string[])
+ * - sources_used is structured (NOT string[])
  * - fully UI-safe
  * - DB-safe (matches simulate route insert)
  */
@@ -61,7 +61,7 @@ export interface AgentPrediction {
    * FIXED:
    * structured + clickable sources
    */
-  sourcesUsed: Source[] | null
+  sources_used: Source[] | null
 
   created_at: string
 }

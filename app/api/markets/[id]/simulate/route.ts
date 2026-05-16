@@ -88,7 +88,7 @@ Return calibrated probability + confidence + reasoning.
 
   return {
     ...object,
-    sourcesUsed: topSources.map((s) => ({
+    sources_used: topSources.map((s) => ({
       title: s.title,
       url: s.url,
     })),
@@ -158,7 +158,7 @@ export async function POST(
           reasoning: prediction.reasoning,
 
           // IMPORTANT FIX: match DB field naming
-          sourcesUsed: prediction.sourcesUsed,
+          sources_used: prediction.sources_used,
         })
         .select()
         .single()
