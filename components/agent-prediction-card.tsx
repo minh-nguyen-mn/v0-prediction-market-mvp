@@ -19,8 +19,8 @@ interface AgentPredictionCardProps {
 const agentColors: Record<string, string> = {
   'Analyst Alpha': 'bg-blue-500',
   'Base Rate Betty': 'bg-green-500',
-  'Market Maker Max': 'bg-purple-500',
   'Contrarian Charlie': 'bg-orange-500',
+  'Market Maker Max': 'bg-purple-500',
   'Information Hunter Iris': 'bg-red-500',
 }
 
@@ -29,23 +29,17 @@ export function AgentPredictionCard({
 }: AgentPredictionCardProps) {
   const [expanded, setExpanded] = useState(false)
 
-  const probability =
-    Number(prediction.probability) * 100
-
-  const confidence =
-    Number(prediction.confidence) * 100
+  const probability = Number(prediction.probability) * 100
+  const confidence = Number(prediction.confidence) * 100
 
   const colorClass =
-    agentColors[prediction.agent_name] ||
-    'bg-gray-500'
+    agentColors[prediction.agent_name] || 'bg-gray-500'
 
   return (
     <Card className="soft-shadow">
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
-          <div
-            className={`h-3 w-3 rounded-full ${colorClass}`}
-          />
+          <div className={`h-3 w-3 rounded-full ${colorClass}`} />
 
           <CardTitle className="text-base">
             {prediction.agent_name}
@@ -58,6 +52,7 @@ export function AgentPredictionCard({
       </CardHeader>
 
       <CardContent>
+        {/* METRICS */}
         <div className="mb-3 flex gap-4">
           <div>
             <p className="text-xl font-bold">
@@ -80,10 +75,9 @@ export function AgentPredictionCard({
           </div>
         </div>
 
+        {/* REASONING */}
         <div className="text-sm">
-          <p className="mb-1 font-medium">
-            Reasoning:
-          </p>
+          <p className="mb-1 font-medium">Reasoning:</p>
 
           <p
             className={
@@ -96,9 +90,7 @@ export function AgentPredictionCard({
           </p>
 
           <button
-            onClick={() =>
-              setExpanded(!expanded)
-            }
+            onClick={() => setExpanded(!expanded)}
             className="mt-1 text-xs text-primary hover:underline"
           >
             {expanded
@@ -107,33 +99,34 @@ export function AgentPredictionCard({
           </button>
         </div>
 
-        {prediction.sourcesUsed &&
-          prediction.sourcesUsed.length > 0 && (
+        {/* SOURCES */}
+        {prediction.sources_used &&
+          prediction.sources_used.length > 0 && (
             <div className="mt-4">
               <p className="mb-2 text-xs font-medium text-muted-foreground">
                 Sources
               </p>
 
               <div className="flex flex-col gap-2">
-                {prediction.sourcesUsed.map(
-                  (source, i) => (
+                {prediction.sources_used
+                  .slice(0, 5)
+                  .map((source, index) => (
                     <a
-                      key={i}
+                      key={index}
                       href={source.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="rounded-md border p-2 text-xs hover:bg-muted"
+                      className="rounded-md border p-2 text-xs transition hover:bg-muted"
                     >
-                      <div className="font-medium text-primary line-clamp-1">
+                      <div className="font-medium text-primary hover:underline">
                         {source.title}
                       </div>
 
-                      <div className="mt-1 text-muted-foreground line-clamp-1">
+                      <div className="mt-1 truncate text-[11px] text-muted-foreground">
                         {source.url}
                       </div>
                     </a>
-                  )
-                )}
+                  ))}
               </div>
             </div>
           )}
