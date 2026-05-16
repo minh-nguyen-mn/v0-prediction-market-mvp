@@ -1,28 +1,23 @@
-import type { Config } from 'tailwindcss'
-
-const config: Config = {
+module.exports = {
   darkMode: ['class'],
   content: [
     './app/**/*.{ts,tsx}',
     './components/**/*.{ts,tsx}',
     './hooks/**/*.{ts,tsx}',
-    './lib/**/*.{ts,tsx}',
   ],
   theme: {
     extend: {
       colors: {
-        background: 'var(--background)',
-        foreground: 'var(--foreground)',
-        card: 'var(--card)',
-        popover: 'var(--popover)',
-        primary: 'var(--primary)',
-        secondary: 'var(--secondary)',
-        muted: 'var(--muted)',
-        accent: 'var(--accent)',
-        destructive: 'var(--destructive)',
-        border: 'var(--border)',
-        input: 'var(--input)',
-        ring: 'var(--ring)',
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        card: 'hsl(var(--card))',
+        primary: 'hsl(var(--primary))',
+        secondary: 'hsl(var(--secondary))',
+        muted: 'hsl(var(--muted))',
+        accent: 'hsl(var(--accent))',
+        border: 'hsl(var(--border))',
+        input: 'hsl(var(--input))',
+        ring: 'hsl(var(--ring))',
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -33,5 +28,3 @@ const config: Config = {
   },
   plugins: [],
 }
-
-export default config
