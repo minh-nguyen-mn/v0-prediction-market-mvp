@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { NextResponse } from 'next/server'
 
 import { AGENT_CONFIGS, type Market } from '@/lib/types'
+
 import {
   executeAgentTrade,
   getCurrentProbability,
@@ -14,55 +15,74 @@ import {
 
 import { fetchWebContext } from '@/lib/web-fetch'
 
-/* =========================
-   MODEL
-========================= */
 function getModel() {
   const provider = process.env.LLM_PROVIDER
-  if (provider === 'anthropic') return anthropic('claude-3-5-sonnet-latest')
+
+  if (provider === 'anthropic') {
+    return anthropic('claude-3-5-sonnet-latest')
+  }
+
   return openai('gpt-4o-mini')
 }
 
-/* =========================
-   SCHEMA FIX (IMPORTANT)
-========================= */
+/**
+ * IMPORTANT:
+ * ALL KEYS REQUIRED
+ * otherwise OpenAI structured output fails
+ */
 const agentPredictionSchema = z.object({
   probability: z.number().min(0.01).max(0.99),
+
   confidence: z.number().min(0.1).max(1.0),
+
   reasoning: z.string(),
+
+  sourcesUsed: z.array(
+    z.object({
+      title: z.string(),
+      url: z.string(),
+    })
+  ),
 })
 
-/* =========================
-   AGENT RUNNER (FULL FIX)
-========================= */
 async function runAgentPrediction(
-  agent: (typeof AGENT_CONFIGS)[0],
+  agent: typeof AGENT_CONFIGS[0],
   market: Market,
-  state: MarketState
+  currentMarketState: MarketState
 ) {
-  const currentProb = getCurrentProbability(state)
+  const currentProb =
+    getCurrentProbability(currentMarketState)
 
-  const web = await fetchWebContext(market.question_clean, agent.name)
+  const web = await fetchWebContext(
+    market.question_clean,
+    agent.name
+  )
 
-  // IMPORTANT FIX:
-  // each agent sees DIFFERENT ordered evidence view
-  const topSources = web.sources.slice(0, 5)
+  const webContext = [
+    web.answer,
 
-  const webContext =
-    `
-Answer summary:
-${web.answer}
+    web.sources
+      .map(
+        (s) =>
+          `TITLE: ${s.title}\nCONTENT: ${s.content}`
+      )
+      .join('\n\n'),
+  ].join('\n\n')
 
-Evidence (ranked):
-${topSources
-  .map((s, i) => `${i + 1}. ${s.title} — ${s.content.slice(0, 200)}`)
-  .join('\n')}
-`.trim()
+  const structuredSources = web.sources
+    .slice(0, 5)
+    .map((s) => ({
+      title: s.title,
+      url: s.url,
+    }))
 
-  const { object } = await generateObject({
-    model: getModel(),
-    schema: agentPredictionSchema,
-    prompt: `
+  const { object: prediction } =
+    await generateObject({
+      model: getModel(),
+
+      schema: agentPredictionSchema,
+
+      prompt: `
 You are ${agent.name}.
 
 Persona:
@@ -71,44 +91,60 @@ ${agent.persona}
 Biases:
 ${agent.biases.join(', ')}
 
+Preferred information:
+${agent.informationSources.join(', ')}
+
 Market:
 ${market.question_clean}
 
-Resolution:
+Resolution criteria:
 ${market.resolution_criteria}
 
-Current probability: ${(currentProb * 100).toFixed(2)}%
+Current probability:
+${(currentProb * 100).toFixed(2)}%
 
-Evidence:
+Web evidence:
 ${webContext}
 
-Return calibrated probability + confidence + reasoning.
+Return:
+- probability
+- confidence
+- reasoning
+- sourcesUsed
+
+IMPORTANT:
+Use your own persona and biases.
 `,
-  })
+    })
 
   return {
-    ...object,
-    sources_used: topSources.map((s) => ({
-      title: s.title,
-      url: s.url,
-    })),
+    ...prediction,
+    sourcesUsed: structuredSources,
   }
 }
 
-/* =========================
-   ROUTE
-========================= */
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  {
+    params,
+  }: {
+    params: Promise<{ id: string }>
+  }
 ) {
   try {
     const { id } = await params
+
     const supabase = await createClient()
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
     }
 
     const { data: market } = await supabase
@@ -118,21 +154,38 @@ export async function POST(
       .single()
 
     if (!market) {
-      return NextResponse.json({ error: 'Market not found' }, { status: 404 })
+      return NextResponse.json(
+        { error: 'Market not found' },
+        { status: 404 }
+      )
     }
+
+    const probabilityBefore = Number(
+      market.current_probability
+    )
 
     let state: MarketState = {
       yesShares: Number(market.yes_shares),
       noShares: Number(market.no_shares),
-      liquidityParam: Number(market.liquidity_param),
+      liquidityParam: Number(
+        market.liquidity_param
+      ),
     }
 
     const results = []
 
     for (const agent of AGENT_CONFIGS) {
-      const prediction = await runAgentPrediction(agent, market, state)
+      const prediction =
+        await runAgentPrediction(
+          agent,
+          market as Market,
+          state
+        )
 
-      const tradeSize = Math.max(5, Math.floor(prediction.confidence * 100))
+      const tradeSize = Math.max(
+        5,
+        Math.floor(prediction.confidence * 100)
+      )
 
       const trade = executeAgentTrade(
         state,
@@ -157,16 +210,20 @@ export async function POST(
           trade_size: tradeSize,
           reasoning: prediction.reasoning,
 
-          // IMPORTANT FIX: match DB field naming
-          sources_used: prediction.sources_used,
+          // IMPORTANT:
+          // snake_case for DB
+          sources_used: prediction.sourcesUsed,
         })
         .select()
         .single()
 
-      if (saved) results.push(saved)
+      if (saved) {
+        results.push(saved)
+      }
     }
 
-    const finalProbability = getCurrentProbability(state)
+    const finalProbability =
+      getCurrentProbability(state)
 
     await supabase
       .from('markets')
@@ -177,12 +234,33 @@ export async function POST(
       })
       .eq('id', id)
 
-    return NextResponse.json({
-      predictions: results,
-      finalProbability,
+    await supabase.from('simulation_runs').insert({
+      market_id: id,
+      probability_before: probabilityBefore,
+      probability_after: finalProbability,
     })
-  } catch (e) {
-    console.error(e)
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+
+    return NextResponse.json({
+      market: {
+        ...market,
+        current_probability: finalProbability,
+        yes_shares: state.yesShares,
+        no_shares: state.noShares,
+      },
+
+      predictions: results,
+
+      probabilityChange: {
+        before: probabilityBefore,
+        after: finalProbability,
+      },
+    })
+  } catch (err) {
+    console.error(err)
+
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
   }
 }
