@@ -108,7 +108,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
 
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <Card className="glass soft-shadow">
+            <Card>
               <CardHeader>
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -167,7 +167,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           </div>
 
           <div className="lg:col-span-1">
-            <Card className="glass soft-shadow">
+            <Card>
               <CardHeader>
                 <CardTitle>Run Simulation</CardTitle>
                 <CardDescription>
