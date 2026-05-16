@@ -29,17 +29,23 @@ export function AgentPredictionCard({
 }: AgentPredictionCardProps) {
   const [expanded, setExpanded] = useState(false)
 
-  const probability = Number(prediction.probability) * 100
-  const confidence = Number(prediction.confidence) * 100
+  const probability =
+    Number(prediction.probability) * 100
+
+  const confidence =
+    Number(prediction.confidence) * 100
 
   const colorClass =
-    agentColors[prediction.agent_name] || 'bg-gray-500'
+    agentColors[prediction.agent_name] ||
+    'bg-gray-500'
 
   return (
     <Card className="soft-shadow">
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
-          <div className={`h-3 w-3 rounded-full ${colorClass}`} />
+          <div
+            className={`h-3 w-3 rounded-full ${colorClass}`}
+          />
 
           <CardTitle className="text-base">
             {prediction.agent_name}
@@ -77,20 +83,24 @@ export function AgentPredictionCard({
 
         {/* REASONING */}
         <div className="text-sm">
-          <p className="mb-1 font-medium">Reasoning:</p>
+          <p className="mb-1 font-medium">
+            Reasoning:
+          </p>
 
           <p
             className={
               expanded
                 ? ''
-                : 'line-clamp-4 text-muted-foreground'
+                : 'line-clamp-3 text-muted-foreground'
             }
           >
             {prediction.reasoning}
           </p>
 
           <button
-            onClick={() => setExpanded(!expanded)}
+            onClick={() =>
+              setExpanded(!expanded)
+            }
             className="mt-1 text-xs text-primary hover:underline"
           >
             {expanded
@@ -100,29 +110,29 @@ export function AgentPredictionCard({
         </div>
 
         {/* SOURCES */}
-        {prediction.sources_used &&
-          prediction.sources_used.length > 0 && (
+        {prediction.sourcesUsed &&
+          prediction.sourcesUsed.length > 0 && (
             <div className="mt-4">
               <p className="mb-2 text-xs font-medium text-muted-foreground">
                 Sources
               </p>
 
               <div className="flex flex-col gap-2">
-                {prediction.sources_used
+                {prediction.sourcesUsed
                   .slice(0, 5)
-                  .map((source, index) => (
+                  .map((source, i) => (
                     <a
-                      key={index}
+                      key={i}
                       href={source.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="rounded-md border p-2 text-xs transition hover:bg-muted"
+                      className="rounded-md border bg-muted/40 px-2 py-2 text-xs hover:bg-muted"
                     >
-                      <div className="font-medium text-primary hover:underline">
+                      <div className="line-clamp-1 font-medium text-primary">
                         {source.title}
                       </div>
 
-                      <div className="mt-1 truncate text-[11px] text-muted-foreground">
+                      <div className="line-clamp-1 text-[10px] text-muted-foreground">
                         {source.url}
                       </div>
                     </a>

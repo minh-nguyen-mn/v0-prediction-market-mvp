@@ -5,10 +5,7 @@ import { anthropic } from '@ai-sdk/anthropic'
 import { z } from 'zod'
 import { NextResponse } from 'next/server'
 
-import {
-  AGENT_CONFIGS,
-  type Market,
-} from '@/lib/types'
+import { AGENT_CONFIGS, type Market } from '@/lib/types'
 
 import {
   executeAgentTrade,
@@ -32,60 +29,64 @@ function getModel() {
 }
 
 /* =========================
-   STRUCTURED OUTPUT SCHEMA
+   STRUCTURED OUTPUT
 ========================= */
 const agentPredictionSchema = z.object({
   probability: z.number().min(0.01).max(0.99),
 
-  confidence: z.number().min(0.1).max(1),
+  confidence: z.number().min(0.1).max(1.0),
 
   reasoning: z.string(),
 
   /**
-   * IMPORTANT:
-   * OpenAI structured outputs require
-   * ALL fields in schema to exist.
-   *
-   * We do NOT trust LLM-generated sources,
-   * but must keep this field required.
+   * REQUIRED
+   * OpenAI structured output requires all keys present
    */
-  sourcesUsed: z.array(z.string()),
+  sourcesUsed: z.array(
+    z.object({
+      title: z.string(),
+      url: z.string(),
+    }),
+  ),
 })
 
 /* =========================
-   AGENT RUNNER
+   AGENT EXECUTION
 ========================= */
 async function runAgentPrediction(
-  agent: (typeof AGENT_CONFIGS)[0],
+  agent: typeof AGENT_CONFIGS[0],
   market: Market,
-  currentMarketState: MarketState
+  currentMarketState: MarketState,
 ) {
-  const currentProb =
-    getCurrentProbability(currentMarketState)
+  const currentProb = getCurrentProbability(currentMarketState)
 
   /**
-   * Independent retrieval per agent
+   * Independent retrieval
    */
   const web = await fetchWebContext(
     market.question_clean,
-    agent.name
+    agent.name,
   )
 
-  /**
-   * Build evidence context
-   */
   const webContext = [
     web.answer,
 
     ...web.sources.map(
-      (s) =>
-        `TITLE: ${s.title}
+      (s, i) => `
+SOURCE ${i + 1}
+Title: ${s.title}
 URL: ${s.url}
-CONTENT: ${s.content}`
+Content: ${s.content}
+`,
     ),
   ].join('\n\n')
 
-  const { object } = await generateObject({
+  const topSources = web.sources.slice(0, 5).map((s) => ({
+    title: s.title,
+    url: s.url,
+  }))
+
+  const { object: prediction } = await generateObject({
     model: getModel(),
 
     schema: agentPredictionSchema,
@@ -93,64 +94,52 @@ CONTENT: ${s.content}`
     prompt: `
 You are ${agent.name}.
 
-Persona:
+PERSONA:
 ${agent.persona}
 
-Biases:
+COGNITIVE BIASES:
 ${agent.biases.join(', ')}
 
-Preferred information sources:
+PREFERRED INFORMATION SOURCES:
 ${agent.informationSources.join(', ')}
 
-Market Question:
+MARKET QUESTION:
 ${market.question_clean}
 
-Resolution Criteria:
+RESOLUTION CRITERIA:
 ${market.resolution_criteria}
 
-Category:
+CATEGORY:
 ${market.category}
 
-Current market probability:
+CURRENT MARKET PROBABILITY:
 ${(currentProb * 100).toFixed(2)}%
 
-Web Evidence:
+WEB RESEARCH:
 ${webContext}
 
-Instructions:
-- Produce an independent forecast
-- Stay faithful to your persona
-- Use retrieved evidence
-- Avoid blindly following consensus
-- Give concise but substantive reasoning
+INSTRUCTIONS:
+- Think independently according to your persona
+- Use the evidence differently from other agents
+- You may disagree strongly with consensus
+- Provide realistic probabilistic reasoning
+- Use the supplied source list
 
 Return:
-- probability (0-1)
-- confidence (0-1)
+- probability
+- confidence
 - reasoning
 - sourcesUsed
 `,
   })
 
   /**
-   * IMPORTANT:
-   * Ignore hallucinated LLM sources.
-   * Replace with REAL Tavily sources.
+   * Force actual retrieved sources
+   * instead of hallucinated ones.
    */
-  return {
-    probability: object.probability,
+  prediction.sourcesUsed = topSources
 
-    confidence: object.confidence,
-
-    reasoning: object.reasoning,
-
-    sources_used: web.sources
-      .slice(0, 5)
-      .map((s) => ({
-        title: s.title || s.url,
-        url: s.url,
-      })),
-  }
+  return prediction
 }
 
 /* =========================
@@ -158,7 +147,7 @@ Return:
 ========================= */
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params
@@ -172,7 +161,7 @@ export async function POST(
     if (!user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
-        { status: 401 }
+        { status: 401 },
       )
     }
 
@@ -185,84 +174,62 @@ export async function POST(
     if (!market) {
       return NextResponse.json(
         { error: 'Market not found' },
-        { status: 404 }
+        { status: 404 },
       )
     }
 
     const probabilityBefore = Number(
-      market.current_probability
+      market.current_probability,
     )
 
     let state: MarketState = {
       yesShares: Number(market.yes_shares),
-
       noShares: Number(market.no_shares),
-
-      liquidityParam: Number(
-        market.liquidity_param
-      ),
+      liquidityParam: Number(market.liquidity_param),
     }
 
     const results = []
 
-    /* =========================
-       AGENT LOOP
-    ========================= */
+    /**
+     * Sequential simulation
+     * Each agent trades after observing
+     * updated market state.
+     */
     for (const agent of AGENT_CONFIGS) {
-      const prediction =
-        await runAgentPrediction(
-          agent,
-          market as Market,
-          state
-        )
+      const prediction = await runAgentPrediction(
+        agent,
+        market as Market,
+        state,
+      )
 
       const tradeSize = Math.max(
         5,
-        Math.floor(
-          prediction.confidence * 100
-        )
+        Math.floor(prediction.confidence * 100),
       )
 
       const trade = executeAgentTrade(
         state,
         prediction.probability,
         prediction.confidence,
-        tradeSize
+        tradeSize,
       )
 
       state = {
         yesShares: trade.newYesShares,
-
         noShares: trade.newNoShares,
-
-        liquidityParam:
-          state.liquidityParam,
+        liquidityParam: state.liquidityParam,
       }
 
-      /**
-       * IMPORTANT:
-       * DB uses snake_case
-       */
       const { data: saved } = await supabase
         .from('agent_predictions')
         .insert({
           market_id: id,
-
           agent_name: agent.name,
-
-          probability:
-            prediction.probability,
-
-          confidence:
-            prediction.confidence,
-
+          probability: prediction.probability,
+          confidence: prediction.confidence,
           trade_size: tradeSize,
-
-          reasoning:
-            prediction.reasoning,
-
-          sources_used:
-            prediction.sources_used,
+          reasoning: prediction.reasoning,
+          sourcesUsed: prediction.sourcesUsed,
         })
         .select()
         .single()
@@ -278,11 +245,8 @@ export async function POST(
     await supabase
       .from('markets')
       .update({
-        current_probability:
-          finalProbability,
-
+        current_probability: finalProbability,
         yes_shares: state.yesShares,
-
         no_shares: state.noShares,
       })
       .eq('id', id)
@@ -291,23 +255,15 @@ export async function POST(
       .from('simulation_runs')
       .insert({
         market_id: id,
-
-        probability_before:
-          probabilityBefore,
-
-        probability_after:
-          finalProbability,
+        probability_before: probabilityBefore,
+        probability_after: finalProbability,
       })
 
     return NextResponse.json({
       market: {
         ...market,
-
-        current_probability:
-          finalProbability,
-
+        current_probability: finalProbability,
         yes_shares: state.yesShares,
-
         no_shares: state.noShares,
       },
 
@@ -315,7 +271,6 @@ export async function POST(
 
       probabilityChange: {
         before: probabilityBefore,
-
         after: finalProbability,
       },
     })
@@ -323,12 +278,8 @@ export async function POST(
     console.error(err)
 
     return NextResponse.json(
-      {
-        error: 'Internal server error',
-      },
-      {
-        status: 500,
-      }
+      { error: 'Internal server error' },
+      { status: 500 },
     )
   }
 }

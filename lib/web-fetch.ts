@@ -9,6 +9,11 @@ export interface WebContextResult {
   sources: WebSource[]
 }
 
+/**
+ * Agent-diversified web retrieval
+ * Each agent receives a different retrieval lens
+ * so they no longer share identical evidence.
+ */
 export async function fetchWebContext(
   query: string,
   agentName?: string
@@ -36,39 +41,78 @@ export async function fetchWebContext(
   })
 
   if (!res.ok) {
-    throw new Error('Tavily search failed')
+    throw new Error(`Tavily search failed: ${res.status}`)
   }
 
   const data = await res.json()
 
-  const sources: WebSource[] = (data.results || []).map((r: any) => ({
-    title: r.title || 'Untitled Source',
-    url: r.url || '',
-    content: r.content || '',
-  }))
+  const allSources: WebSource[] =
+    (data.results || []).map((r: any) => ({
+      title: r.title || 'Untitled Source',
+      url: r.url || '',
+      content: r.content || '',
+    })) || []
 
+  /**
+   * Deduplicate by URL
+   */
+  const uniqueMap = new Map<string, WebSource>()
+
+  for (const source of allSources) {
+    if (!source.url) continue
+
+    if (!uniqueMap.has(source.url)) {
+      uniqueMap.set(source.url, source)
+    }
+  }
+
+  const uniqueSources = Array.from(uniqueMap.values())
+
+  /**
+   * Return more than 5 internally
+   * UI can decide how many to render
+   */
   return {
     answer: data.answer || '',
-    sources,
+    sources: uniqueSources.slice(0, 8),
   }
 }
 
+/**
+ * Core diversification logic
+ * This is what makes agents independently research.
+ */
 function diversifyQuery(query: string, agent?: string): string {
   switch (agent) {
     case 'Analyst Alpha':
-      return `${query} statistics probability models forecasts quantitative analysis`
+      return `
+${query}
+statistical forecast probability models prediction data analysis historical performance
+`
 
     case 'Base Rate Betty':
-      return `${query} historical frequency base rates historical outcomes`
+      return `
+${query}
+historical frequencies base rates long-term outcomes archives statistics prior cases
+`
 
     case 'Market Maker Max':
-      return `${query} betting odds implied probability prediction markets`
+      return `
+${query}
+betting odds implied probability prediction market pricing bookmaker consensus
+`
 
     case 'Contrarian Charlie':
-      return `${query} risks failures criticism downside concerns upset scenarios`
+      return `
+${query}
+arguments against consensus hidden risks upset scenarios failure cases skepticism
+`
 
     case 'Information Hunter Iris':
-      return `${query} latest news breaking updates current developments`
+      return `
+${query}
+breaking news latest developments current updates reports social sentiment
+`
 
     default:
       return query

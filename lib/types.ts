@@ -28,10 +28,9 @@ export interface AgentPrediction {
   reasoning: string
 
   /**
-   * IMPORTANT:
-   * Supabase returns snake_case
+   * Structured sources
    */
-  sources_used: Source[] | null
+  sourcesUsed: Source[] | null
 
   created_at: string
 }
@@ -71,7 +70,11 @@ export const AGENT_CONFIGS: AgentConfig[] = [
     persona:
       'A quantitative analyst who builds probabilistic models using structured data, statistics, and historical trends.',
     biases: ['overconfidence in models', 'underweighting rare events'],
-    informationSources: ['statistical datasets', 'historical trends', 'market signals'],
+    informationSources: [
+      'statistical datasets',
+      'historical trends',
+      'market signals',
+    ],
   },
 
   {
@@ -79,7 +82,11 @@ export const AGENT_CONFIGS: AgentConfig[] = [
     persona:
       'A strict base-rate thinker who heavily relies on historical frequencies and reference classes.',
     biases: ['anchoring bias', 'resistance to novel narratives'],
-    informationSources: ['historical frequencies', 'archives', 'long-term datasets'],
+    informationSources: [
+      'historical frequencies',
+      'archives',
+      'long-term datasets',
+    ],
   },
 
   {
@@ -87,7 +94,11 @@ export const AGENT_CONFIGS: AgentConfig[] = [
     persona:
       'A pricing strategist who focuses on inefficiencies between market price and implied probability.',
     biases: ['over-optimization of short-term arbitrage'],
-    informationSources: ['market odds', 'betting markets', 'liquidity signals'],
+    informationSources: [
+      'market odds',
+      'betting markets',
+      'liquidity signals',
+    ],
   },
 
   {
@@ -95,7 +106,11 @@ export const AGENT_CONFIGS: AgentConfig[] = [
     persona:
       'A skeptical analyst who actively challenges consensus and searches for overlooked risks and failure modes.',
     biases: ['contrarian bias', 'overweighting tail risks'],
-    informationSources: ['critical analysis', 'alternative viewpoints', 'failure case studies'],
+    informationSources: [
+      'critical analysis',
+      'alternative viewpoints',
+      'failure case studies',
+    ],
   },
 
   {
@@ -103,6 +118,10 @@ export const AGENT_CONFIGS: AgentConfig[] = [
     persona:
       'A real-time intelligence agent that prioritizes breaking news, updates, and rapidly changing information.',
     biases: ['recency bias', 'overreaction to news flow'],
-    informationSources: ['breaking news', 'live updates', 'social media trends'],
+    informationSources: [
+      'breaking news',
+      'live updates',
+      'social media trends',
+    ],
   },
 ]
