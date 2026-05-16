@@ -7,13 +7,18 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
+  CardTitle
 } from '@/components/ui/card'
 
 import type { AgentPrediction } from '@/lib/types'
 
 interface AgentPredictionCardProps {
   prediction: AgentPrediction
+}
+
+interface StructuredSource {
+  title: string
+  url: string
 }
 
 const agentColors: Record<string, string> = {
@@ -39,11 +44,63 @@ export function AgentPredictionCard({
     agentColors[prediction.agent_name] ||
     'bg-gray-500'
 
-  const parsedSources = Array.isArray(
-    prediction.sources_used
-  )
-    ? prediction.sources_used
-    : []
+  /* =========================
+     SAFE SOURCE PARSING
+  ========================= */
+
+  const parsedSources: StructuredSource[] =
+    Array.isArray(prediction.sources_used)
+      ? prediction.sources_used
+          .map((source: any) => {
+            // NEW FORMAT
+            if (
+              typeof source === 'object' &&
+              source?.title &&
+              source?.url
+            ) {
+              return {
+                title: source.title,
+                url: source.url,
+              }
+            }
+
+            // OLD FORMAT SUPPORT
+            if (typeof source === 'string') {
+              const titleMatch =
+                source.match(
+                  /SOURCE_TITLE:\s*(.*?)(\n|$)/
+                )
+
+              const urlMatch =
+                source.match(
+                  /SOURCE_URL:\s*(.*?)(\n|$)/
+                )
+
+              if (
+                titleMatch?.[1] &&
+                urlMatch?.[1]
+              ) {
+                return {
+                  title: titleMatch[1].trim(),
+                  url: urlMatch[1].trim(),
+                }
+              }
+
+              // raw url fallback
+              if (source.startsWith('http')) {
+                return {
+                  title: source
+                    .replace(/^https?:\/\//, '')
+                    .slice(0, 60),
+                  url: source,
+                }
+              }
+            }
+
+            return null
+          })
+          .filter(Boolean)
+      : []
 
   return (
     <Card className="soft-shadow">
@@ -123,36 +180,18 @@ export function AgentPredictionCard({
             <div className="flex flex-col gap-2">
               {parsedSources
                 .slice(0, 5)
-                .map((source: any, i: number) => {
-                  const title =
-                    source?.title ||
-                    'Untitled Source'
-
-                  const url = source?.url || ''
-
-                  if (!url) {
-                    return null
-                  }
-
-                  return (
-                    <a
-                      key={i}
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={url}
-                      className="group rounded-md border bg-muted/40 px-3 py-2 transition hover:bg-muted"
-                    >
-                      <div className="truncate text-xs font-medium text-primary group-hover:underline">
-                        {title}
-                      </div>
-
-                      <div className="truncate text-[10px] text-muted-foreground">
-                        {url}
-                      </div>
-                    </a>
-                  )
-                })}
+                .map((source, i) => (
+                  <a
+                    key={i}
+                    href={source.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="truncate rounded-md border bg-muted px-3 py-2 text-xs text-primary transition hover:bg-accent hover:underline"
+                    title={source.url}
+                  >
+                    {source.title}
+                  </a>
+                ))}
             </div>
           </div>
         )}
