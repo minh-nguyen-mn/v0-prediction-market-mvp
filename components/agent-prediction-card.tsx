@@ -19,8 +19,8 @@ interface AgentPredictionCardProps {
 const agentColors: Record<string, string> = {
   'Analyst Alpha': 'bg-blue-500',
   'Base Rate Betty': 'bg-green-500',
-  'Contrarian Charlie': 'bg-orange-500',
   'Market Maker Max': 'bg-purple-500',
+  'Contrarian Charlie': 'bg-orange-500',
   'Information Hunter Iris': 'bg-red-500',
 }
 
@@ -29,17 +29,23 @@ export function AgentPredictionCard({
 }: AgentPredictionCardProps) {
   const [expanded, setExpanded] = useState(false)
 
-  const probability = Number(prediction.probability) * 100
-  const confidence = Number(prediction.confidence) * 100
+  const probability =
+    Number(prediction.probability) * 100
+
+  const confidence =
+    Number(prediction.confidence) * 100
 
   const colorClass =
-    agentColors[prediction.agent_name] || 'bg-gray-500'
+    agentColors[prediction.agent_name] ||
+    'bg-gray-500'
 
   return (
     <Card className="soft-shadow">
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
-          <div className={`h-3 w-3 rounded-full ${colorClass}`} />
+          <div
+            className={`h-3 w-3 rounded-full ${colorClass}`}
+          />
 
           <CardTitle className="text-base">
             {prediction.agent_name}
@@ -83,14 +89,16 @@ export function AgentPredictionCard({
             className={
               expanded
                 ? ''
-                : 'line-clamp-3 text-muted-foreground'
+                : 'line-clamp-4 text-muted-foreground'
             }
           >
             {prediction.reasoning}
           </p>
 
           <button
-            onClick={() => setExpanded(!expanded)}
+            onClick={() =>
+              setExpanded(!expanded)
+            }
             className="mt-1 text-xs text-primary hover:underline"
           >
             {expanded
@@ -99,28 +107,33 @@ export function AgentPredictionCard({
           </button>
         </div>
 
-        {prediction.sources_used &&
-          prediction.sources_used.length > 0 && (
+        {prediction.sourcesUsed &&
+          prediction.sourcesUsed.length > 0 && (
             <div className="mt-4">
-              <p className="mb-1 text-xs font-medium text-muted-foreground">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
                 Sources
               </p>
 
-              <div className="flex flex-col gap-1">
-                {prediction.sources_used
-                  .slice(0, 5)
-                  .map((source, i) => (
+              <div className="flex flex-col gap-2">
+                {prediction.sourcesUsed.map(
+                  (source, i) => (
                     <a
                       key={i}
                       href={source.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="line-clamp-1 text-xs text-primary hover:underline"
-                      title={source.url}
+                      className="rounded-md border p-2 text-xs hover:bg-muted"
                     >
-                      {source.title}
+                      <div className="font-medium text-primary line-clamp-1">
+                        {source.title}
+                      </div>
+
+                      <div className="mt-1 text-muted-foreground line-clamp-1">
+                        {source.url}
+                      </div>
                     </a>
-                  ))}
+                  )
+                )}
               </div>
             </div>
           )}
