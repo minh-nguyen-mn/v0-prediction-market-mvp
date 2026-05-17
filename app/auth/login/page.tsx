@@ -39,7 +39,7 @@ export default function Page() {
         },
       })
       if (error) throw error
-      window.location.href = '/'
+      window.location.assign('/protected')
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred')
     } finally {

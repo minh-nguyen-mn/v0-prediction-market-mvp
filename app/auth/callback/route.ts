@@ -5,7 +5,7 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl
 
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/'
+  const next = searchParams.get('next') ?? '/protected'
 
   if (!code) {
     return NextResponse.redirect(`${origin}/auth/login`)
