@@ -46,7 +46,7 @@ export default function Page() {
         },
       })
       if (error) throw error
-      router.push('/auth/sign-up-success')
+      window.location.href = '/'
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred')
     } finally {

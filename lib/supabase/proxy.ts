@@ -34,13 +34,5 @@ export async function updateSession(request: NextRequest) {
     data: { session },
   } = await supabase.auth.getSession()
 
-  const isProtected = request.nextUrl.pathname.startsWith('/protected')
-
-  if (isProtected && !session) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/auth/login'
-    return NextResponse.redirect(url)
-  }
-
   return response
 }
