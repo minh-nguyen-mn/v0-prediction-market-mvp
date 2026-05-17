@@ -50,8 +50,8 @@ export default async function HomePage() {
               <h3 className="text-lg font-semibold">5 Distinct Agents</h3>
               <p className="text-muted-foreground">
                 Watch agents with unique biases and information sources analyze 
-                markets: Analyst Alpha, Pundit Prime, Contrarian Charlie, 
-                Base Rate Betty, and News Ninja.
+                markets: Quant Sigma, Macro Maven, Contrarian Charlie, 
+                Base Rate Betty, and Signal Scout.
               </p>
             </div>
             <div className="flex flex-col gap-2">
